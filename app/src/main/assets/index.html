@@ -1400,6 +1400,11 @@ document.getElementById("clockwrap").addEventListener("click", function(){
 window.__nativeCmd = function(cmd){
   if(cmd === "toggle") toggle();
   else if(cmd === "skip") endBlock();
+  else if(cmd === "stop"){
+    running = false;
+    remaining = modeSeconds(mode);
+    save(true); nativeSync(); renderClock();
+  }
   else if(cmd === "exitfs"){ if(fsOn) setFullscreen(false); }
   return true;
 };
