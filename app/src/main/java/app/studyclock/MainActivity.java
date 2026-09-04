@@ -82,8 +82,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Hide or restore the status and navigation bars. */
-    private void setImmersive(boolean on) {
+    /** Hide or restore the status and navigation bars.
+     *  Deliberately not called setImmersive: Activity already declares a public
+     *  method of that name, and a private override will not compile. */
+    private void applyImmersive(boolean on) {
         immersive = on;
         View decor = getWindow().getDecorView();
         WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), decor);
@@ -141,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void setFullscreen(final boolean on) {
             runOnUiThread(new Runnable() {
-                @Override public void run() { setImmersive(on); }
+                @Override public void run() { applyImmersive(on); }
             });
         }
 
