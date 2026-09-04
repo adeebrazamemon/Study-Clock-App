@@ -113,10 +113,24 @@
     position:fixed;inset:0;display:flex;flex-direction:column;
     align-items:center;justify-content:center;background:var(--bg);padding:24px;
   }
-  body.fs .face{width:min(74vw,74vh);height:min(74vw,74vh)}
-  body.fs .digits{font-size:min(20vw,17vh)}
-  body.fs .face .inset .digits{font-size:min(11vw,11vh)}
-  body.fs .tod{font-size:min(5vw,4.5vh);margin-top:14px}
+  body.fs .face{width:58vmin;height:58vmin}
+  body.fs .digits{font-size:15vmin}
+  body.fs .tod{font-size:4vmin;margin-top:2vmin}
+  body.fs.analog .face{width:74vmin;height:74vmin}
+  @media (orientation:landscape){
+    body.fs .clockwrap{padding:2vh 4vw}
+    body.fs .face{width:52vmin;height:52vmin}
+    body.fs .digits{font-size:13vmin;margin-top:1vh}
+    body.fs.analog .face{width:78vmin;height:78vmin}
+  }
+
+
+  /* digit styles */
+  .digits.d-mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:0}
+  .digits.d-thin{font-weight:200;letter-spacing:.01em}
+  .digits.d-outline{color:transparent;-webkit-text-stroke:2px var(--focus);paint-order:stroke}
+  body.fs .digits.d-outline{-webkit-text-stroke-width:3px}
+
   body.fs .controls{margin-top:26px;opacity:.25;transition:opacity .25s}
   body.fs .clockwrap:hover .controls,body.fs .controls:focus-within{opacity:1}
   body.fs.touched .controls{opacity:1}
@@ -252,6 +266,25 @@
     .chip{padding:9px 15px}
     .iconbtn{width:40px;height:40px}
   }
+  .dtabs{display:flex;gap:6px;margin:-4px 0 16px}
+  .dtabs button{flex:1;background:none;border:1px solid var(--line);border-radius:999px;
+    padding:7px 10px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+  .dtabs button[aria-selected="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus);font-weight:600}
+  .dpane{display:none}
+  .dpane.on{display:block}
+
+  .goalwrap{margin-top:18px}
+  .goalbar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:var(--line)}
+  .goalbar span{height:100%}
+  .goalmeta{display:flex;justify-content:space-between;color:var(--muted);font-size:12.5px;margin-top:6px}
+  .goalmeta b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
+  .tasksel{margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+  .tasksel .lab{color:var(--muted);font-size:12.5px;margin-bottom:8px}
+
+
+  body.fs .goalwrap{display:none}
+
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -318,7 +351,13 @@
         <div class="controls">
           <button class="primary" id="startstop">Start</button>
           <button class="ghost" id="reset">Reset</button>
-          <button class="ghost exitfs" id="exitfs">Exit full screen</button>
+          <button class="ghost" id="endblock">End block</button>
+      <button class="ghost exitfs" id="exitfs">Exit full screen</button>
+        </div>
+
+        <div class="goalwrap" id="goalwrap">
+          <div class="goalbar" id="goalbar"></div>
+          <div class="goalmeta"><span id="goalnow">0h 00m</span><span id="goalof">of 4h</span></div>
         </div>
 
         <div class="cyclenote" id="cyclenote">Session 1 of 4 before the long break</div>
@@ -333,6 +372,10 @@
     <section class="card" id="chipcard">
       <h2>Counting toward</h2>
       <div class="chips" id="chips"></div>
+      <div class="tasksel" id="tasksel">
+        <div class="lab">Working on</div>
+        <div class="chips" id="taskchips"></div>
+      </div>
     </section>
   </div>
 
@@ -358,27 +401,53 @@
 
 <dialog id="dlg-settings">
   <h2>Settings</h2>
-  <div class="field"><label for="in-focus">Focus length (minutes)</label><input type="number" id="in-focus" min="1" max="180"></div>
-  <div class="field"><label for="in-short">Short break (minutes)</label><input type="number" id="in-short" min="1" max="60"></div>
-  <div class="field"><label for="in-long">Long break (minutes)</label><input type="number" id="in-long" min="1" max="120"></div>
-  <div class="field"><label for="in-cycles">Focus sessions before a long break</label><input type="number" id="in-cycles" min="1" max="12"></div>
-  <div class="field"><label for="in-goal">Daily target (hours)</label><input type="number" id="in-goal" min="1" max="16" step="0.5"></div>
-  <div class="field"><label for="in-style">Clock style</label>
-    <select id="in-style"><option value="digital">Digital</option><option value="analog">Analog</option></select>
+  <div class="dtabs">
+    <button data-pane="gen" aria-selected="true">General</button>
+    <button data-pane="app" aria-selected="false">Appearance</button>
   </div>
-  <div class="field"><label for="in-theme">Appearance</label>
-    <select id="in-theme">
-      <option value="auto">Match device</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
+
+  <div class="dpane on" id="pane-gen">
+    <div class="field"><label for="in-focus">Focus length (minutes)</label><input type="number" id="in-focus" min="1" max="180"></div>
+    <div class="field"><label for="in-short">Short break (minutes)</label><input type="number" id="in-short" min="1" max="60"></div>
+    <div class="field"><label for="in-long">Long break (minutes)</label><input type="number" id="in-long" min="1" max="120"></div>
+    <div class="field"><label for="in-cycles">Focus sessions before a long break</label><input type="number" id="in-cycles" min="1" max="12"></div>
+    <div class="field"><label for="in-goal">Daily target (hours)</label><input type="number" id="in-goal" min="1" max="16" step="0.5"></div>
+    <div class="field"><label for="in-auto">Start the next block automatically</label><input type="checkbox" id="in-auto"></div>
+    <div class="field"><label for="in-sound">Chime when a block ends</label><input type="checkbox" id="in-sound"></div>
   </div>
-  <div class="field"><label for="in-auto">Start the next block automatically</label><input type="checkbox" id="in-auto"></div>
-  <div class="field"><label for="in-sound">Chime when a block ends</label><input type="checkbox" id="in-sound"></div>
+
+  <div class="dpane" id="pane-app">
+    <p class="hint">Changes here apply straight away, so you can leave this open while you look.</p>
+    <div class="field"><label for="in-theme">App appearance</label>
+      <select id="in-theme">
+        <option value="auto">Match device</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+    <div class="field"><label for="in-style">Clock style</label>
+      <select id="in-style"><option value="digital">Digital</option><option value="analog">Analog</option></select>
+    </div>
+    <div class="field"><label for="in-analog">Analog face</label>
+      <select id="in-analog">
+        <option value="ticks">Ticks</option>
+        <option value="quarters">Quarters</option>
+        <option value="minimal">Minimal</option>
+      </select>
+    </div>
+    <div class="field"><label for="in-digit">Digit style</label>
+      <select id="in-digit">
+        <option value="plain">Plain</option>
+        <option value="mono">Monospaced</option>
+        <option value="thin">Thin</option>
+        <option value="outline">Outline</option>
+      </select>
+    </div>
+    <div class="field"><label for="in-tod">Show the current time</label><input type="checkbox" id="in-tod"></div>
+  </div>
+
   <div class="dialog-actions">
-    <button class="ghost" id="open-cats">Categories</button>
-    <button class="ghost" id="set-cancel">Cancel</button>
-    <button class="primary" id="set-save">Save</button>
+    <button class="primary" id="set-save">Done</button>
   </div>
 </dialog>
 
@@ -422,7 +491,8 @@ var PALETTE = ["#1F6F5C","#43648F","#9C4B2A","#6B5B95","#3F7A8C","#8A6D1F","#7A3
 /* ---------- state ---------- */
 var state = {
   settings:{focus:25,shortBreak:5,longBreak:15,cycles:4,goal:4,auto:true,sound:true,
-            style:"digital", theme:"auto"},
+            style:"digital", theme:"auto",
+            analogStyle:"ticks", digitStyle:"plain", showTod:true},
   categories:[
     {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
     {id:"c2",name:"Research",color:PALETTE[1],archived:false},
@@ -558,6 +628,11 @@ function resetBlock(){
   remaining = modeSeconds(mode);
   save(true); nativeSync(); renderClock();
 }
+function endBlock(){
+  if(mode === "focus" && !running && remaining >= modeSeconds(mode)) return;
+  remaining = 0;
+  blockFinished();
+}
 function tick(){
   var now = Date.now();
   var delta = (now - lastTick)/1000;
@@ -670,43 +745,52 @@ function buildFace(style){
   var face = document.getElementById("face");
   var svg = '<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">';
   if(style === "analog"){
-    for(var i=0;i<60;i++){
-      var a = (i/60)*Math.PI*2 - Math.PI/2;
-      var major = (i % 5 === 0);
-      var r1 = major ? 84 : 89, r2 = 95;
-      svg += '<line class="tickmark'+(major?" major":"")+'" x1="'+(110+Math.cos(a)*r1).toFixed(1)+
-             '" y1="'+(110+Math.sin(a)*r1).toFixed(1)+'" x2="'+(110+Math.cos(a)*r2).toFixed(1)+
-             '" y2="'+(110+Math.sin(a)*r2).toFixed(1)+'"/>';
+    var as = state.settings.analogStyle || "ticks";
+    if(as !== "minimal"){
+      var n = (as === "quarters") ? 12 : 60;
+      for(var i=0;i<n;i++){
+        var a = (i/n)*Math.PI*2 - Math.PI/2;
+        var major = (as === "quarters") ? (i % 3 === 0) : (i % 5 === 0);
+        var r1 = major ? 82 : 89, r2 = 95;
+        svg += '<line class="tickmark'+(major?" major":"")+'" x1="'+(110+Math.cos(a)*r1).toFixed(1)+
+               '" y1="'+(110+Math.sin(a)*r1).toFixed(1)+'" x2="'+(110+Math.cos(a)*r2).toFixed(1)+
+               '" y2="'+(110+Math.sin(a)*r2).toFixed(1)+'"/>';
+      }
     }
     svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
-    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" stroke-dasharray="'+CIRC+'" stroke-dashoffset="0"></circle>';
+    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="rotate(-90 110 110)"></circle>';
     svg += '<line class="hand" id="hand" x1="110" y1="110" x2="110" y2="30"/>';
     svg += '<circle class="hub" cx="110" cy="110" r="5"/>';
-    svg += '</svg><div class="inset"><div class="digits" id="facedigits">25:00</div></div>';
-    // digits live inside the dial in analog mode
+    svg += '</svg>';
     face.innerHTML = svg;
     document.getElementById("digits").style.display = "none";
   }else{
     svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
-    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" stroke-dasharray="'+CIRC+'" stroke-dashoffset="0"></circle>';
+    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="rotate(-90 110 110)"></circle>';
     svg += '</svg>';
     face.innerHTML = svg;
     document.getElementById("digits").style.display = "";
   }
-  document.getElementById("tod").style.display = (style === "analog") ? "none" : "";
-  faceBuilt = style;
+  document.getElementById("tod").style.display = (state.settings.showTod === false) ? "none" : "";
+  document.body.classList.toggle("analog", style === "analog");
+  var dg = document.getElementById("digits");
+  dg.className = "digits d-" + (state.settings.digitStyle || "plain");
+  faceBuilt = style + "|" + (state.settings.analogStyle||"ticks") + "|" + (state.settings.digitStyle||"plain");
   document.getElementById("stylebtn").textContent =
     style === "analog" ? "Digital" : "Analog";
 }
 
 function renderTod(){
   var el = document.getElementById("tod");
-  if(el) el.textContent = new Date().toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+  if(!el) return;
+  el.style.display = (state.settings.showTod === false) ? "none" : "";
+  el.textContent = new Date().toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
 }
 
 function renderClock(){
   var style = state.settings.style;
-  if(faceBuilt !== style) buildFace(style);
+  var sig = style + "|" + (state.settings.analogStyle||"ticks") + "|" + (state.settings.digitStyle||"plain");
+  if(faceBuilt !== sig) buildFace(style);
 
   var secs = Math.max(0, Math.ceil(remaining));
   var label = pad(Math.floor(secs/60))+":"+pad(secs%60);
@@ -718,27 +802,86 @@ function renderClock(){
 
   var total = modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
+  // Elapsed share. The ring keeps only what is left, starting where the hand is,
+  // so both empty clockwise from twelve.
+  var used = 1 - frac;
   var arc = document.getElementById("arc");
   if(arc){
-    arc.style.strokeDasharray = CIRC;
-    arc.style.strokeDashoffset = CIRC*(1-frac);
+    arc.style.strokeDasharray = (CIRC*frac) + " " + CIRC;
+    arc.style.strokeDashoffset = -(CIRC*used);
   }
   var hand = document.getElementById("hand");
   if(hand){
-    var ang = frac*Math.PI*2 - Math.PI/2;
+    var ang = used*Math.PI*2 - Math.PI/2;
     hand.setAttribute("x2", (110+Math.cos(ang)*78).toFixed(1));
     hand.setAttribute("y2", (110+Math.sin(ang)*78).toFixed(1));
   }
 
   renderTod();
   document.getElementById("startstop").textContent = running ? "Pause" : "Start";
+  var eb = document.getElementById("endblock");
+  if(mode === "focus"){
+    eb.textContent = "End block";
+    eb.style.display = (running || remaining < modeSeconds(mode)) ? "" : "none";
+  }else{
+    eb.textContent = "Skip break";
+    eb.style.display = "";          // always skippable
+  }
   document.getElementById("todayline").textContent = "Today: " + fmtHM(daySeconds(key(new Date())));
+  renderGoalBar();
   var done = state.completed % state.settings.cycles;
   document.getElementById("cyclenote").textContent =
     "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
   document.title = (running ? label + " " : "") +
     (mode === "focus" ? "Focus" : "Break") + " \u00b7 Study Clock";
 }
+function renderGoalBar(){
+  var k = key(new Date());
+  var rec = state.days[k] || {};
+  var goal = Math.max(1, state.settings.goal*3600);
+  var bar = document.getElementById("goalbar");
+  bar.innerHTML = "";
+  var total = 0, ids = Object.keys(rec).sort(function(a,b){return rec[b]-rec[a];});
+  ids.forEach(function(cid){
+    total += rec[cid];
+    var seg = document.createElement("span");
+    seg.style.width = Math.min(100, (rec[cid]/goal)*100) + "%";
+    seg.style.background = catColor(cid);
+    seg.title = catName(cid) + " " + fmtHM(rec[cid]);
+    bar.appendChild(seg);
+  });
+  document.getElementById("goalnow").innerHTML =
+    "<b>" + fmtHM(total) + "</b>" + (total >= goal ? " \u2713" : "");
+  document.getElementById("goalof").textContent = "of " + fmtShort(goal) + " target";
+}
+
+function renderTaskChips(){
+  var wrap = document.getElementById("taskchips");
+  wrap.innerHTML = "";
+  var open = state.tasks.filter(function(t){ return !t.done; });
+  if(!open.length){
+    var e = document.createElement("span");
+    e.style.color = "var(--muted)"; e.style.fontSize = "13px";
+    e.textContent = "No open tasks. Add them on the Tasks page.";
+    wrap.appendChild(e);
+    return;
+  }
+  open.forEach(function(t){
+    var b = document.createElement("button");
+    b.className = "chip";
+    b.setAttribute("aria-pressed", t.id === state.activeTask);
+    b.style.setProperty("--dot", catColor(t.catId));
+    b.innerHTML = '<span class="dot"></span>';
+    b.appendChild(document.createTextNode(t.text));
+    b.addEventListener("click", function(){
+      state.activeTask = (state.activeTask === t.id) ? null : t.id;
+      if(state.activeTask) state.activeCat = t.catId;
+      save(true); renderTaskChips(); renderChips(); renderTasks(); nativeSync();
+    });
+    wrap.appendChild(b);
+  });
+}
+
 function renderModeButtons(){
   document.getElementById("m-focus").setAttribute("aria-pressed", mode==="focus");
   document.getElementById("m-short").setAttribute("aria-pressed", mode==="shortBreak");
@@ -840,7 +983,7 @@ function renderTasks(){
       t.done = !t.done;
       t.doneDate = t.done ? key(new Date()) : null;
       if(t.done && state.activeTask === t.id) state.activeTask = null;
-      save(true); renderTasks(); renderBreakdown(); nativeSync();
+      save(true); renderTasks(); renderTaskChips(); renderBreakdown(); nativeSync();
     });
 
     var name = document.createElement("button");
@@ -851,7 +994,7 @@ function renderTasks(){
       if(t.done) return;
       state.activeTask = (state.activeTask === t.id) ? null : t.id;
       if(state.activeTask) state.activeCat = t.catId;
-      save(true); renderTasks(); renderChips(); nativeSync();
+      save(true); renderTasks(); renderTaskChips(); renderChips(); nativeSync();
     });
 
     var meta = document.createElement("span");
@@ -902,7 +1045,7 @@ function addTask(){
     catId:state.activeCat, done:false, doneDate:null
   });
   inp.value = "";
-  save(true); renderTasks();
+  save(true); renderTasks(); renderTaskChips();
 }
 
 /* ---------- stats & calendar ---------- */
@@ -1043,25 +1186,51 @@ function renderBreakdown(){
 
 function renderAll(){
   applyTheme();
-  renderClock(); renderModeButtons(); renderChips(); renderTasks();
+  renderClock(); renderModeButtons(); renderChips(); renderTaskChips(); renderTasks();
   renderStats(); renderCalendar(); renderBreakdown();
 }
 
 /* ---------- dialogs ---------- */
 var dlgSettings = document.getElementById("dlg-settings");
+var APPEARANCE = {"in-theme":"theme","in-style":"style","in-analog":"analogStyle",
+                  "in-digit":"digitStyle"};
+
 document.getElementById("open-settings").addEventListener("click", function(){
   document.getElementById("in-focus").value = state.settings.focus;
   document.getElementById("in-short").value = state.settings.shortBreak;
   document.getElementById("in-long").value = state.settings.longBreak;
   document.getElementById("in-cycles").value = state.settings.cycles;
   document.getElementById("in-goal").value = state.settings.goal;
-  document.getElementById("in-style").value = state.settings.style;
-  document.getElementById("in-theme").value = state.settings.theme;
   document.getElementById("in-auto").checked = state.settings.auto;
   document.getElementById("in-sound").checked = state.settings.sound;
+  for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
+  document.getElementById("in-tod").checked = state.settings.showTod !== false;
   dlgSettings.showModal();
 });
-document.getElementById("set-cancel").addEventListener("click", function(){ dlgSettings.close(); });
+
+// Appearance takes effect as you pick it, so you can watch it change behind the dialog.
+Object.keys(APPEARANCE).forEach(function(el){
+  document.getElementById(el).addEventListener("change", function(){
+    state.settings[APPEARANCE[el]] = document.getElementById(el).value;
+    save(true); applyTheme(); renderClock();
+  });
+});
+
+Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), function(b){
+  b.addEventListener("click", function(){
+    var want = b.getAttribute("data-pane");
+    Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), function(x){
+      x.setAttribute("aria-selected", x.getAttribute("data-pane") === want);
+    });
+    document.getElementById("pane-gen").classList.toggle("on", want === "gen");
+    document.getElementById("pane-app").classList.toggle("on", want === "app");
+  });
+});
+
+document.getElementById("in-tod").addEventListener("change", function(){
+  state.settings.showTod = document.getElementById("in-tod").checked;
+  save(true); renderClock();
+});
 document.getElementById("set-save").addEventListener("click", function(){
   function num(id, lo, hi, dflt){
     var v = parseFloat(document.getElementById(id).value);
@@ -1072,8 +1241,6 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.longBreak  = Math.round(num("in-long",1,120,state.settings.longBreak));
   state.settings.cycles     = Math.round(num("in-cycles",1,12,state.settings.cycles));
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
-  state.settings.style      = document.getElementById("in-style").value;
-  state.settings.theme      = document.getElementById("in-theme").value;
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
   if(!running) remaining = modeSeconds(mode);
@@ -1082,9 +1249,6 @@ document.getElementById("set-save").addEventListener("click", function(){
 
 var dlgCats = document.getElementById("dlg-cats");
 function openCats(){ renderCatList(); dlgCats.showModal(); }
-document.getElementById("open-cats").addEventListener("click", function(){
-  dlgSettings.close(); openCats();
-});
 function renderCatList(){
   var list = document.getElementById("catlist");
   list.innerHTML = "";
@@ -1192,6 +1356,7 @@ document.getElementById("filein").addEventListener("change", function(ev){
 /* ---------- wiring ---------- */
 document.getElementById("startstop").addEventListener("click", toggle);
 document.getElementById("reset").addEventListener("click", resetBlock);
+document.getElementById("endblock").addEventListener("click", endBlock);
 document.getElementById("m-focus").addEventListener("click", function(){ setMode("focus", false); });
 document.getElementById("m-short").addEventListener("click", function(){ setMode("shortBreak", false); });
 document.getElementById("m-long").addEventListener("click", function(){ setMode("longBreak", false); });
@@ -1232,6 +1397,12 @@ document.getElementById("clockwrap").addEventListener("click", function(){
   clearTimeout(window.__touchT);
   window.__touchT = setTimeout(function(){ document.body.classList.remove("touched"); }, 3000);
 });
+window.__nativeCmd = function(cmd){
+  if(cmd === "toggle") toggle();
+  else if(cmd === "skip") endBlock();
+  else if(cmd === "exitfs"){ if(fsOn) setFullscreen(false); }
+  return true;
+};
 window.addEventListener("beforeunload", function(){ save(true); });
 document.addEventListener("visibilitychange", function(){ if(document.hidden) save(true); });
 
