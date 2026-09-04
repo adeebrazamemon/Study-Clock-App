@@ -66,7 +66,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Hide or restore the status and navigation bars. */
-    private void setImmersive(boolean on) {
+    public void setImmersive(boolean on) {
         immersive = on;
         View decor = getWindow().getDecorView();
         WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), decor);
