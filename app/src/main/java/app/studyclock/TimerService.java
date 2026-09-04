@@ -22,6 +22,8 @@ import androidx.core.app.NotificationManagerCompat;
 public class TimerService extends Service {
 
     public static final String ACTION_START = "app.studyclock.START";
+    public static final String ACTION_TOGGLE = "app.studyclock.TOGGLE";
+    public static final String ACTION_SKIP = "app.studyclock.SKIP";
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
 
@@ -31,6 +33,13 @@ public class TimerService extends Service {
     private static final int ID_ALERT = 2;
 
     private static TimerService instance;
+
+    /** How notification buttons reach the page. Same process, so a plain callback is enough. */
+    public interface CommandListener { void onCommand(String cmd); }
+    private static CommandListener listener;
+    public static void setCommandListener(CommandListener l) { listener = l; }
+
+    private boolean paused = false;
 
     private long endTime;
     private String label = "Focus";
@@ -45,6 +54,7 @@ public class TimerService extends Service {
         if (s == null) return;
         s.endTime = end;
         s.label = label;
+        s.paused = false;
         s.post();
     }
 
@@ -57,10 +67,17 @@ public class TimerService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_START.equals(intent.getAction())) {
+        String action = intent == null ? null : intent.getAction();
+        if (ACTION_START.equals(action)) {
             endTime = intent.getLongExtra(EXTRA_END, System.currentTimeMillis());
             String l = intent.getStringExtra(EXTRA_LABEL);
             if (l != null) label = l;
+            paused = false;
+        } else if (ACTION_TOGGLE.equals(action)) {
+            paused = !paused;
+            if (listener != null) listener.onCommand("toggle");
+        } else if (ACTION_SKIP.equals(action)) {
+            if (listener != null) listener.onCommand("skip");
         }
         startForeground(ID_ONGOING, build());
         // Restart if Android kills us under memory pressure.
@@ -91,12 +108,23 @@ public class TimerService extends Service {
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
 
         // Android draws and ticks the countdown; nothing here runs per second.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (!paused && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             b.setUsesChronometer(true);
             b.setChronometerCountDown(true);
             b.setWhen(endTime);
         }
+        if (paused) b.setContentText("Paused");
+
+        b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
+        b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
         return b.build();
+    }
+
+    private PendingIntent servicePi(String action, int req) {
+        Intent i = new Intent(this, TimerService.class);
+        i.setAction(action);
+        return PendingIntent.getService(this, req, i,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     /** Heads-up alert when a block ends. Fires even from the lock screen. */
@@ -146,6 +174,7 @@ public class TimerService extends Service {
     @Override
     public void onDestroy() {
         instance = null;
+        listener = null;
         super.onDestroy();
     }
 
