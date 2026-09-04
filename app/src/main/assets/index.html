@@ -8,250 +8,353 @@
 <meta name="theme-color" content="#1F6F5C">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Study Clock">
 <link rel="icon" href="favicon-64.png" sizes="64x64">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
+  /* ---------- theme tokens ---------- */
   :root{
-    --bg:#E9EDEC;
-    --surface:#FFFFFF;
-    --ink:#16211F;
-    --muted:#5F706C;
-    --line:#D3DBD9;
-    --focus:#1F6F5C;
-    --focus-soft:#DCEAE5;
-    --rest:#43648F;
-    --rest-soft:#DEE6EF;
-    --warn:#9C4B2A;
+    --bg:#E9EDEC; --surface:#FFFFFF; --ink:#16211F; --muted:#5F706C;
+    --line:#D3DBD9; --focus:#1F6F5C; --focus-soft:#DCEAE5;
+    --rest:#43648F; --rest-soft:#DEE6EF; --warn:#9C4B2A;
+    --heat-lo:220,234,229; --heat-hi:22,86,71;
     --radius:8px;
-    --shell:1080px;
   }
+  .dark-tokens{}
+  :root[data-theme="dark"]{
+    --bg:#0F1513; --surface:#18201E; --ink:#E7EDEB; --muted:#93A29E;
+    --line:#2A3431; --focus:#3E9C84; --focus-soft:#172B26;
+    --rest:#5E8AC0; --rest-soft:#182533; --warn:#C4703F;
+    --heat-lo:26,44,39; --heat-hi:96,206,175;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1513; --surface:#18201E; --ink:#E7EDEB; --muted:#93A29E;
+      --line:#2A3431; --focus:#3E9C84; --focus-soft:#172B26;
+      --rest:#5E8AC0; --rest-soft:#182533; --warn:#C4703F;
+      --heat-lo:26,44,39; --heat-hi:96,206,175;
+    }
+  }
+
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
+  html,body{margin:0;padding:0;height:100%}
   body{
-    background:var(--bg);
-    color:var(--ink);
+    background:var(--bg); color:var(--ink);
     font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
-    font-size:15px;
-    line-height:1.5;
-    -webkit-font-smoothing:antialiased;
+    font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:none;
   }
   body.rest{--focus:var(--rest);--focus-soft:var(--rest-soft)}
-  .shell{max-width:var(--shell);margin:0 auto;padding:28px 20px 64px}
 
-  header.top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
-  header.top h1{font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0}
-  header.top .lifetime{color:var(--muted);font-size:14px}
-  header.top .lifetime b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .shell{max-width:1040px;margin:0 auto;padding:20px 18px 96px}
+  .page{display:none}
+  .page.on{display:block}
 
-  .panes{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
-  @media (max-width:880px){.panes{grid-template-columns:minmax(0,1fr)}}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+  header.top h1{font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0}
+  .headbtns{display:flex;gap:6px}
+  .iconbtn{
+    background:none;border:1px solid var(--line);border-radius:8px;
+    width:36px;height:36px;font:inherit;font-size:15px;cursor:pointer;color:var(--ink);
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  .iconbtn:hover{border-color:var(--muted)}
 
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
-  .card + .card{margin-top:20px}
-  .card h2{font-size:14px;font-weight:600;margin:0 0 14px;color:var(--muted)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .card + .card{margin-top:16px}
+  .card h2{font-size:13.5px;font-weight:600;margin:0 0 13px;color:var(--muted)}
 
-  /* Timer */
-  .timer{text-align:center;padding:26px 20px 22px}
-  .mode-row{display:flex;gap:6px;justify-content:center;margin-bottom:20px}
+  /* ---------- clock ---------- */
+  .clockwrap{text-align:center;padding:14px 14px 20px}
+  .mode-row{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
   .mode-row button{
     background:none;border:1px solid var(--line);border-radius:999px;
-    padding:5px 13px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
+    padding:7px 15px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
   }
   .mode-row button[aria-pressed="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus);font-weight:600}
-  .dial{position:relative;width:220px;height:220px;margin:0 auto}
-  .dial svg{transform:rotate(-90deg);display:block}
-  .dial .track{fill:none;stroke:var(--line);stroke-width:6}
-  .dial .arc{fill:none;stroke:var(--focus);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .3s linear}
-  .readout{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .readout .clock{font-size:52px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
-  .readout .sub{color:var(--muted);font-size:13px;margin-top:8px}
-  .controls{display:flex;gap:10px;justify-content:center;margin-top:22px}
+
+  .face{position:relative;width:250px;height:250px;margin:0 auto}
+  .face svg{display:block;width:100%;height:100%}
+  .ring-track{fill:none;stroke:var(--line);stroke-width:6}
+  .ring-arc{fill:none;stroke:var(--focus);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .3s linear}
+  .tickmark{stroke:var(--line);stroke-width:2}
+  .tickmark.major{stroke:var(--muted);stroke-width:3}
+  .hand{stroke:var(--focus);stroke-width:4;stroke-linecap:round}
+  .hub{fill:var(--focus)}
+  .digits{
+    font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-.02em;line-height:1;
+    font-size:52px;margin-top:4px;
+  }
+  .face .inset{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .face .inset .digits{font-size:34px;margin:0}
+  .tod{color:var(--muted);font-size:14px;margin-top:9px;font-variant-numeric:tabular-nums}
+  .todayline{color:var(--muted);font-size:13.5px;margin-top:3px}
+  .controls{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
   button.primary{
     background:var(--focus);color:#fff;border:1px solid var(--focus);border-radius:var(--radius);
-    padding:10px 30px;font:inherit;font-weight:600;cursor:pointer;min-width:118px;
+    padding:11px 32px;font:inherit;font-weight:600;cursor:pointer;min-width:120px;
   }
   button.ghost{
     background:none;color:var(--ink);border:1px solid var(--line);border-radius:var(--radius);
-    padding:10px 18px;font:inherit;cursor:pointer;
+    padding:11px 18px;font:inherit;cursor:pointer;
   }
   button.primary:hover{filter:brightness(1.08)}
   button.ghost:hover{border-color:var(--muted)}
-  .cyclenote{color:var(--muted);font-size:13px;margin-top:16px}
+  .cyclenote{color:var(--muted);font-size:13px;margin-top:15px}
 
-  /* Category chips */
+  /* ---------- full screen ---------- */
+  body.fs .shell{padding:0;max-width:none}
+  body.fs .tabs,body.fs header.top,body.fs .mode-row,body.fs .cyclenote,
+  body.fs #chipcard,body.fs .clockextras,body.fs .todayline{display:none!important}
+  body.fs .page{display:none}
+  body.fs .page#page-clock{display:block}
+  body.fs .card{border:none;background:none;padding:0}
+  body.fs .clockwrap{
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;background:var(--bg);padding:24px;
+  }
+  body.fs .face{width:min(74vw,74vh);height:min(74vw,74vh)}
+  body.fs .digits{font-size:min(20vw,17vh)}
+  body.fs .face .inset .digits{font-size:min(11vw,11vh)}
+  body.fs .tod{font-size:min(5vw,4.5vh);margin-top:14px}
+  body.fs .controls{margin-top:26px;opacity:.25;transition:opacity .25s}
+  body.fs .clockwrap:hover .controls,body.fs .controls:focus-within{opacity:1}
+  body.fs.touched .controls{opacity:1}
+  .exitfs{display:none}
+  body.fs .exitfs{display:inline-flex}
+
+  /* ---------- chips ---------- */
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{
-    border:1px solid var(--line);background:none;border-radius:999px;padding:6px 13px;
+    border:1px solid var(--line);background:none;border-radius:999px;padding:7px 14px;
     font:inherit;font-size:13px;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;gap:7px;
   }
   .chip .dot{width:9px;height:9px;border-radius:50%;background:var(--dot,#999)}
   .chip[aria-pressed="true"]{border-color:var(--ink);font-weight:600}
   .chip.add{color:var(--muted);border-style:dashed}
 
-  /* Stats */
-  .statgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  /* ---------- stats ---------- */
+  .statgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
   @media (max-width:520px){.statgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .stat{background:var(--surface);padding:13px 14px}
-  .stat .n{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .stat .n{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .stat .l{color:var(--muted);font-size:12.5px;margin-top:2px}
 
-  /* Calendar */
+  /* ---------- calendar ---------- */
   .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  .calhead .month{font-size:16px;font-weight:600}
-  .navbtn{background:none;border:1px solid var(--line);border-radius:6px;width:30px;height:30px;font:inherit;cursor:pointer;color:var(--ink)}
-  .navbtn:hover{border-color:var(--muted)}
+  .calhead .month{font-size:15.5px;font-weight:600}
   .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
   .dow span{text-align:center;font-size:12px;color:var(--muted)}
   .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
   .day{
     aspect-ratio:1/1;border:1px solid var(--line);border-radius:6px;background:var(--surface);
     display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;
-    padding:6px 7px;font:inherit;cursor:pointer;color:var(--ink);text-align:left;position:relative;
+    padding:5px 6px;font:inherit;cursor:pointer;color:var(--ink);text-align:left;
   }
   .day.blank{border:none;background:none;cursor:default}
-  .day .dn{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .day .dh{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
-  .day.filled .dn{color:rgba(255,255,255,.82)}
+  .day .dn{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .day .dh{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  .day.filled .dn{color:rgba(255,255,255,.85)}
   .day.filled .dh{color:#fff}
   .day.today{outline:2px solid var(--ink);outline-offset:-1px}
   .day[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink) inset}
-  .day:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
   .breakdown{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
   .breakdown h3{font-size:14px;font-weight:600;margin:0 0 10px}
   .bar{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:14px}
-  .bar .nm{width:118px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar .nm{width:112px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bar .track{flex:1;height:9px;background:var(--bg);border-radius:5px;overflow:hidden}
   .bar .fill{height:100%;border-radius:5px}
   .bar .v{width:64px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .subrow{padding-left:15px;font-size:13px;color:var(--muted)}
+  .subrow .nm{width:97px}
   .empty{color:var(--muted);font-size:14px}
 
-  /* Dialogs */
-  dialog{border:1px solid var(--line);border-radius:var(--radius);padding:22px;max-width:460px;width:calc(100% - 32px);color:var(--ink);background:var(--surface)}
-  dialog::backdrop{background:rgba(20,32,30,.34)}
-  dialog h2{margin:0 0 16px;font-size:16px;color:var(--ink)}
-  .field{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+  /* ---------- tasks ---------- */
+  .taskadd{display:flex;gap:8px;margin-bottom:12px}
+  .taskadd input{
+    flex:1;min-width:0;font:inherit;padding:10px 12px;border:1px solid var(--line);
+    border-radius:var(--radius);background:var(--surface);color:var(--ink);
+  }
+  .taskadd input:focus{outline:none;border-color:var(--focus)}
+  .taskadd button{
+    background:var(--focus);color:#fff;border:1px solid var(--focus);border-radius:var(--radius);
+    padding:0 18px;font:inherit;font-weight:600;cursor:pointer;flex:none;
+  }
+  .tasklist{display:flex;flex-direction:column;gap:5px}
+  .task{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+  .task.active{border-color:var(--focus);background:var(--focus-soft)}
+  .task.done{opacity:.55}
+  .tick{
+    width:21px;height:21px;flex:none;border:1.5px solid var(--muted);border-radius:5px;
+    background:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;
+    font-size:13px;line-height:1;color:transparent;
+  }
+  .task.done .tick{background:var(--focus);border-color:var(--focus);color:#fff}
+  .tname{
+    flex:1;min-width:0;background:none;border:none;font:inherit;text-align:left;color:var(--ink);
+    cursor:pointer;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .task.done .tname{text-decoration:line-through}
+  .tmeta{display:flex;align-items:center;gap:7px;flex:none;color:var(--muted);font-size:12.5px}
+  .tmeta .dot{width:8px;height:8px;border-radius:50%}
+  .tmeta .tt{font-variant-numeric:tabular-nums}
+  .tdel{background:none;border:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px;flex:none}
+  .tdel:hover{color:var(--warn)}
+  .tasknote{color:var(--muted);font-size:13px;margin-top:11px}
+
+  /* ---------- tabs ---------- */
+  .tabs{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:flex;background:var(--surface);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tabs button{
+    flex:1;background:none;border:none;font:inherit;font-size:12px;color:var(--muted);
+    padding:9px 4px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .tabs button .ic{font-size:17px;line-height:1}
+  .tabs button[aria-selected="true"]{color:var(--focus);font-weight:600}
+
+  /* ---------- dialogs ---------- */
+  dialog{
+    border:1px solid var(--line);border-radius:var(--radius);padding:20px;max-width:460px;
+    width:calc(100% - 30px);color:var(--ink);background:var(--surface);
+  }
+  dialog::backdrop{background:rgba(0,0,0,.45)}
+  dialog h2{margin:0 0 15px;font-size:16px;color:var(--ink)}
+  .field{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:11px}
   .field label{font-size:14px}
   .field input[type=number],.field input[type=text],.field input[type=date],.field select{
-    font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);
+    font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);
   }
   .field input[type=number]{width:82px;text-align:right;font-variant-numeric:tabular-nums}
-  .field input[type=text]{width:190px}
-  .dialog-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+  .field input[type=text]{width:180px}
+  .dialog-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
   .catrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
   .catrow .dot{width:11px;height:11px;border-radius:50%;flex:none}
   .catrow .nm{flex:1;font-size:14px}
   .catrow button{background:none;border:none;color:var(--warn);font:inherit;font-size:13px;cursor:pointer;padding:2px 4px}
-  .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
-  .footer{margin-top:26px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 13px}
+  .footer{margin-top:22px;display:flex;gap:14px;row-gap:9px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
   .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:0}
   .footer button:hover{color:var(--ink)}
-  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .clockextras{display:flex;gap:9px;justify-content:center;margin-top:16px;flex-wrap:wrap}
 
-  /* Phone */
   @media (max-width:560px){
-    .shell{padding:16px 14px calc(40px + env(safe-area-inset-bottom))}
-    header.top{margin-bottom:16px}
-    .card{padding:16px}
-    .card + .card{margin-top:14px}
-    .panes{gap:14px}
-    .timer{padding:18px 12px 16px}
-    .dial{width:196px;height:196px}
-    .dial svg{width:196px;height:196px}
-    .readout .clock{font-size:46px}
-    button.primary{padding:13px 30px}
-    button.ghost{padding:13px 18px}
-    .day{padding:4px 5px;border-radius:5px}
-    .day .dn{font-size:11px}
-    .day .dh{font-size:11px}
-    .bar .nm{width:92px}
+    .shell{padding:14px 13px 92px}
+    .card{padding:15px}
+    .bar .nm{width:88px}
     .bar .v{width:58px}
-    .footer{gap:16px;row-gap:10px}
+    .subrow .nm{width:75px}
   }
-  /* Fingers need bigger targets than a mouse does */
   @media (pointer:coarse){
-    .mode-row button{padding:8px 15px}
     .chip{padding:9px 15px}
-    .navbtn{width:38px;height:38px}
+    .iconbtn{width:40px;height:40px}
   }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <div class="shell">
+
   <header class="top">
-    <h1>Study Clock</h1>
-    <div class="lifetime">Total logged: <b id="lifetime">0h</b></div>
+    <h1 id="pagetitle">Study Clock</h1>
+    <div class="headbtns">
+      <button class="iconbtn" id="themebtn" title="Theme" aria-label="Theme">&#9681;</button>
+      <button class="iconbtn" id="open-settings" title="Settings" aria-label="Settings">&#9881;</button>
+    </div>
   </header>
 
-  <div class="panes">
-    <div>
-      <section class="card timer">
+  <!-- ===== Overview ===== -->
+  <div class="page on" id="page-overview">
+    <section class="card">
+      <h2>Where the hours went</h2>
+      <div class="statgrid">
+        <div class="stat"><div class="n" id="s-today">0h</div><div class="l">Today</div></div>
+        <div class="stat"><div class="n" id="s-week">0h</div><div class="l">This week</div></div>
+        <div class="stat"><div class="n" id="s-month">0h</div><div class="l">This month</div></div>
+        <div class="stat"><div class="n" id="s-days">0</div><div class="l">Days studied</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="calhead">
+        <button class="iconbtn" id="prev" aria-label="Previous month">&#8249;</button>
+        <div class="month" id="monthlabel">September 2026</div>
+        <button class="iconbtn" id="next" aria-label="Next month">&#8250;</button>
+      </div>
+      <div class="dow"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+      <div class="grid" id="grid"></div>
+      <div class="breakdown">
+        <h3 id="bdtitle">September 2026</h3>
+        <div id="bdbody"></div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <button id="open-manual">Add time manually</button>
+      <button id="export">Back up data</button>
+      <button id="import">Restore from backup</button>
+      <span id="savenote"></span>
+    </div>
+  </div>
+
+  <!-- ===== Clock ===== -->
+  <div class="page" id="page-clock">
+    <section class="card">
+      <div class="clockwrap" id="clockwrap">
         <div class="mode-row">
           <button id="m-focus" aria-pressed="true">Focus</button>
           <button id="m-short" aria-pressed="false">Short break</button>
           <button id="m-long" aria-pressed="false">Long break</button>
         </div>
-        <div class="dial">
-          <svg width="220" height="220" viewBox="0 0 220 220" aria-hidden="true">
-            <circle class="track" cx="110" cy="110" r="100"></circle>
-            <circle class="arc" id="arc" cx="110" cy="110" r="100"
-                    stroke-dasharray="628.3" stroke-dashoffset="0"></circle>
-          </svg>
-          <div class="readout">
-            <div class="clock" id="clock">25:00</div>
-            <div class="sub" id="subline">Today: 0h 00m</div>
-          </div>
-        </div>
+
+        <div class="face" id="face"></div>
+        <div class="digits" id="digits">25:00</div>
+        <div class="tod" id="tod">--:--</div>
+        <div class="todayline" id="todayline">Today: 0h 00m</div>
+
         <div class="controls">
           <button class="primary" id="startstop">Start</button>
           <button class="ghost" id="reset">Reset</button>
+          <button class="ghost exitfs" id="exitfs">Exit full screen</button>
         </div>
+
         <div class="cyclenote" id="cyclenote">Session 1 of 4 before the long break</div>
-      </section>
 
-      <section class="card">
-        <h2>Counting toward</h2>
-        <div class="chips" id="chips"></div>
-      </section>
-    </div>
+        <div class="clockextras">
+          <button class="ghost" id="fsbtn">Full screen</button>
+          <button class="ghost" id="stylebtn">Analog</button>
+        </div>
+      </div>
+    </section>
 
-    <div>
-      <section class="card">
-        <h2>Where the hours went</h2>
-        <div class="statgrid">
-          <div class="stat"><div class="n" id="s-today">0h</div><div class="l">Today</div></div>
-          <div class="stat"><div class="n" id="s-week">0h</div><div class="l">This week</div></div>
-          <div class="stat"><div class="n" id="s-month">0h</div><div class="l">This month</div></div>
-          <div class="stat"><div class="n" id="s-days">0</div><div class="l">Days studied</div></div>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="calhead">
-          <button class="navbtn" id="prev" aria-label="Previous month">&#8249;</button>
-          <div class="month" id="monthlabel">September 2026</div>
-          <button class="navbtn" id="next" aria-label="Next month">&#8250;</button>
-        </div>
-        <div class="dow"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
-        <div class="grid" id="grid"></div>
-        <div class="breakdown">
-          <h3 id="bdtitle">September 2026</h3>
-          <div id="bdbody"></div>
-        </div>
-      </section>
-    </div>
+    <section class="card" id="chipcard">
+      <h2>Counting toward</h2>
+      <div class="chips" id="chips"></div>
+    </section>
   </div>
 
-  <div class="footer">
-    <button id="open-settings">Settings</button>
-    <button id="open-manual">Add time manually</button>
-    <button id="export">Back up data</button>
-    <button id="import">Restore from backup</button>
-    <span id="savenote"></span>
+  <!-- ===== Tasks ===== -->
+  <div class="page" id="page-tasks">
+    <section class="card">
+      <h2>Tasks</h2>
+      <div class="taskadd">
+        <input type="text" id="newtask" placeholder="What are you working on?" maxlength="90">
+        <button id="addtask">Add</button>
+      </div>
+      <div class="tasklist" id="tasklist"></div>
+      <div class="tasknote" id="tasknote"></div>
+    </section>
   </div>
 </div>
+
+<nav class="tabs" id="tabs">
+  <button data-page="overview" aria-selected="true"><span class="ic">&#9635;</span>Overview</button>
+  <button data-page="clock" aria-selected="false"><span class="ic">&#9711;</span>Clock</button>
+  <button data-page="tasks" aria-selected="false"><span class="ic">&#9745;</span>Tasks</button>
+</nav>
 
 <dialog id="dlg-settings">
   <h2>Settings</h2>
@@ -260,11 +363,22 @@
   <div class="field"><label for="in-long">Long break (minutes)</label><input type="number" id="in-long" min="1" max="120"></div>
   <div class="field"><label for="in-cycles">Focus sessions before a long break</label><input type="number" id="in-cycles" min="1" max="12"></div>
   <div class="field"><label for="in-goal">Daily target (hours)</label><input type="number" id="in-goal" min="1" max="16" step="0.5"></div>
+  <div class="field"><label for="in-style">Clock style</label>
+    <select id="in-style"><option value="digital">Digital</option><option value="analog">Analog</option></select>
+  </div>
+  <div class="field"><label for="in-theme">Appearance</label>
+    <select id="in-theme">
+      <option value="auto">Match device</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  </div>
   <div class="field"><label for="in-auto">Start the next block automatically</label><input type="checkbox" id="in-auto"></div>
   <div class="field"><label for="in-sound">Chime when a block ends</label><input type="checkbox" id="in-sound"></div>
   <div class="dialog-actions">
+    <button class="ghost" id="open-cats">Categories</button>
     <button class="ghost" id="set-cancel">Cancel</button>
-    <button class="primary" id="set-save">Save settings</button>
+    <button class="primary" id="set-save">Save</button>
   </div>
 </dialog>
 
@@ -307,7 +421,8 @@ var PALETTE = ["#1F6F5C","#43648F","#9C4B2A","#6B5B95","#3F7A8C","#8A6D1F","#7A3
 
 /* ---------- state ---------- */
 var state = {
-  settings:{focus:25,shortBreak:5,longBreak:15,cycles:4,goal:4,auto:true,sound:true},
+  settings:{focus:25,shortBreak:5,longBreak:15,cycles:4,goal:4,auto:true,sound:true,
+            style:"digital", theme:"auto"},
   categories:[
     {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
     {id:"c2",name:"Research",color:PALETTE[1],archived:false},
@@ -315,7 +430,10 @@ var state = {
   ],
   activeCat:"c1",
   days:{},          // "2026-09-04": { c1: seconds }
-  completed:0       // focus blocks finished, for the cycle counter
+  taskTime:{},      // "2026-09-04": { taskId: seconds }  (a subset of days)
+  tasks:[],         // {id, text, catId, done, doneDate}
+  activeTask:null,
+  completed:0
 };
 
 function load(){
@@ -327,6 +445,9 @@ function load(){
       if(d.settings) Object.assign(state.settings, d.settings);
       if(Array.isArray(d.categories) && d.categories.length) state.categories = d.categories;
       if(d.days && typeof d.days === "object") state.days = d.days;
+      if(d.taskTime && typeof d.taskTime === "object") state.taskTime = d.taskTime;
+      if(Array.isArray(d.tasks)) state.tasks = d.tasks;
+      if(d.activeTask) state.activeTask = d.activeTask;
       if(typeof d.completed === "number") state.completed = d.completed;
       if(d.activeCat) state.activeCat = d.activeCat;
     }
@@ -341,23 +462,20 @@ function save(now){
   if(saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
   if(!now){ saveTimer = setTimeout(function(){ save(true); }, 1500); return; }
   try{ localStorage.setItem(KEY, JSON.stringify(state)); }
-  catch(e){ note("Could not save. Your browser storage may be full or blocked."); }
+  catch(e){ note("Could not save. Storage may be full or blocked."); }
 }
 function note(msg){
   var el = document.getElementById("savenote");
+  if(!el) return;
   el.textContent = msg;
   if(msg) setTimeout(function(){ if(el.textContent === msg) el.textContent = ""; }, 5000);
 }
 
 /* ---------- dates ---------- */
-function key(d){
-  return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
-}
 function pad(n){ return n < 10 ? "0"+n : ""+n; }
+function key(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function parseKey(k){ var p = k.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
-function monthName(y,m){
-  return new Date(y,m,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
-}
+function monthName(y,m){ return new Date(y,m,1).toLocaleDateString(undefined,{month:"long",year:"numeric"}); }
 function mondayIndex(d){ return (d.getDay()+6)%7; }
 
 /* ---------- totals ---------- */
@@ -372,14 +490,32 @@ function addSeconds(k, catId, secs){
   if(state.days[k][catId] === 0) delete state.days[k][catId];
   if(!Object.keys(state.days[k]).length) delete state.days[k];
 }
+function addTaskSeconds(k, taskId, secs){
+  if(!taskId || !secs) return;
+  if(!state.taskTime[k]) state.taskTime[k] = {};
+  state.taskTime[k][taskId] = Math.max(0, (state.taskTime[k][taskId]||0) + secs);
+  if(state.taskTime[k][taskId] === 0) delete state.taskTime[k][taskId];
+  if(!Object.keys(state.taskTime[k]).length) delete state.taskTime[k];
+}
+function taskSeconds(taskId, y, m, dayKey){
+  var t = 0;
+  for(var k in state.taskTime){
+    if(dayKey){ if(k !== dayKey) continue; }
+    else if(y !== undefined){
+      var d = parseKey(k);
+      if(d.getFullYear() !== y || d.getMonth() !== m) continue;
+    }
+    t += state.taskTime[k][taskId] || 0;
+  }
+  return t;
+}
 function fmtHM(secs){
   var h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60);
   return h + "h " + pad(m) + "m";
 }
 function fmtShort(secs){
   var h = secs/3600;
-  if(h >= 10) return Math.round(h) + "h";
-  return (Math.round(h*10)/10) + "h";
+  return h >= 10 ? Math.round(h)+"h" : (Math.round(h*10)/10)+"h";
 }
 function getCat(id){
   for(var i=0;i<state.categories.length;i++) if(state.categories[i].id===id) return state.categories[i];
@@ -387,47 +523,20 @@ function getCat(id){
 }
 function catName(id){ var c = getCat(id); return c ? c.name : "Removed category"; }
 function catColor(id){ var c = getCat(id); return c ? c.color : "#9AA5A2"; }
+function getTask(id){
+  for(var i=0;i<state.tasks.length;i++) if(state.tasks[i].id===id) return state.tasks[i];
+  return null;
+}
+function taskName(id){ var t = getTask(id); return t ? t.text : null; }
 
 /* ---------- timer ---------- */
-var mode = "focus";           // focus | shortBreak | longBreak
-var running = false;
-var remaining = state.settings.focus*60;
-var lastTick = 0;
+var mode = "focus", running = false, remaining = 25*60, lastTick = 0;
 
 function modeSeconds(m){
   if(m === "focus") return state.settings.focus*60;
   if(m === "shortBreak") return state.settings.shortBreak*60;
   return state.settings.longBreak*60;
 }
-/* ---------- Android bridge ----------
-   Present only in the APK build. On the web this is all inert. */
-var NATIVE = (typeof window.AndroidTimer !== "undefined");
-function modeLabel(){
-  if(mode === "focus") return "Focus \u00b7 " + catName(state.activeCat);
-  return mode === "shortBreak" ? "Short break" : "Long break";
-}
-function nativeSync(){
-  if(!NATIVE) return;
-  try{
-    if(running){
-      var end = Date.now() + Math.max(0, remaining) * 1000;
-      window.AndroidTimer.startTimer(String(Math.round(end)), modeLabel());
-    }else{
-      window.AndroidTimer.stopTimer();
-    }
-  }catch(e){}
-}
-function nativeDone(finishedMode){
-  if(!NATIVE) return;
-  try{
-    var title = finishedMode === "focus" ? "Focus block done" : "Break over";
-    var body  = finishedMode === "focus"
-      ? "Time for a break. Today: " + fmtHM(daySeconds(key(new Date())))
-      : "Back to " + catName(state.activeCat) + ".";
-    window.AndroidTimer.blockDone(title, body);
-  }catch(e){}
-}
-
 function setMode(m, autostart){
   mode = m;
   remaining = modeSeconds(m);
@@ -435,44 +544,40 @@ function setMode(m, autostart){
   running = !!autostart;
   lastTick = Date.now();
   nativeSync();
-  renderTimer(); renderModeButtons();
+  renderClock(); renderModeButtons();
 }
 function toggle(){
   running = !running;
   lastTick = Date.now();
   if(!running) save(true);
   nativeSync();
-  renderTimer();
+  renderClock();
 }
 function resetBlock(){
   running = false;
   remaining = modeSeconds(mode);
-  save(true);
-  nativeSync();
-  renderTimer();
+  save(true); nativeSync(); renderClock();
 }
-
 function tick(){
   var now = Date.now();
   var delta = (now - lastTick)/1000;
   lastTick = now;
-  if(!running){ return; }
-  if(delta < 0 || delta > 3600) delta = 0;   // clock jump or long sleep
+  if(!running){ renderTod(); return; }
+  if(delta < 0 || delta > 3600) delta = 0;
 
   if(mode === "focus"){
     var used = Math.min(delta, remaining);
-    if(used > 0) addSeconds(key(new Date()), state.activeCat, used);
+    if(used > 0){
+      var dk = key(new Date());
+      addSeconds(dk, state.activeCat, used);
+      if(state.activeTask) addTaskSeconds(dk, state.activeTask, used);
+    }
     save(false);
   }
   remaining -= delta;
-
-  if(remaining <= 0){
-    remaining = 0;
-    blockFinished();
-  }
-  renderTimer();
+  if(remaining <= 0){ remaining = 0; blockFinished(); }
+  renderClock();
 }
-
 function blockFinished(){
   chime();
   nativeDone(mode);
@@ -503,26 +608,131 @@ function chime(){
       o.connect(g); g.connect(audioCtx.destination);
       o.start(t0+off); o.stop(t0+off+0.2);
     });
-  }catch(e){ /* audio unavailable */ }
+  }catch(e){}
 }
 
-/* ---------- rendering ---------- */
-var viewY, viewM, selectedDay = null;
-var elClock = document.getElementById("clock");
-var elArc = document.getElementById("arc");
-var CIRC = 2*Math.PI*100;
+/* ---------- Android bridge (inert on the web) ---------- */
+var NATIVE = (typeof window.AndroidTimer !== "undefined");
+function modeLabel(){
+  if(mode === "focus"){
+    var t = state.activeTask ? taskName(state.activeTask) : null;
+    return "Focus \u00b7 " + (t || catName(state.activeCat));
+  }
+  return mode === "shortBreak" ? "Short break" : "Long break";
+}
+function nativeSync(){
+  if(!NATIVE) return;
+  try{
+    if(running){
+      var end = Date.now() + Math.max(0, remaining)*1000;
+      window.AndroidTimer.startTimer(String(Math.round(end)), modeLabel());
+    }else{
+      window.AndroidTimer.stopTimer();
+    }
+  }catch(e){}
+}
+function nativeDone(finishedMode){
+  if(!NATIVE) return;
+  try{
+    var title = finishedMode === "focus" ? "Focus block done" : "Break over";
+    var body = finishedMode === "focus"
+      ? "Time for a break. Today: " + fmtHM(daySeconds(key(new Date())))
+      : "Back to " + catName(state.activeCat) + ".";
+    window.AndroidTimer.blockDone(title, body);
+  }catch(e){}
+}
+function nativeFullscreen(on){
+  if(!NATIVE) return;
+  try{ if(window.AndroidTimer.setFullscreen) window.AndroidTimer.setFullscreen(!!on); }catch(e){}
+}
 
-function renderTimer(){
+/* ---------- theme ---------- */
+function applyTheme(){
+  var t = state.settings.theme;
+  if(t === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+  var btn = document.getElementById("themebtn");
+  btn.textContent = t === "dark" ? "\u25CF" : (t === "light" ? "\u25CB" : "\u25D1");
+  btn.title = "Appearance: " + (t === "auto" ? "match device" : t);
+}
+function cycleTheme(){
+  var order = ["auto","light","dark"];
+  var i = order.indexOf(state.settings.theme);
+  state.settings.theme = order[(i+1) % order.length];
+  save(true); applyTheme();
+}
+
+/* ---------- clock rendering ---------- */
+var CIRC = 2*Math.PI*100;
+var faceBuilt = null;   // which style is currently in the DOM
+
+function buildFace(style){
+  var face = document.getElementById("face");
+  var svg = '<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">';
+  if(style === "analog"){
+    for(var i=0;i<60;i++){
+      var a = (i/60)*Math.PI*2 - Math.PI/2;
+      var major = (i % 5 === 0);
+      var r1 = major ? 84 : 89, r2 = 95;
+      svg += '<line class="tickmark'+(major?" major":"")+'" x1="'+(110+Math.cos(a)*r1).toFixed(1)+
+             '" y1="'+(110+Math.sin(a)*r1).toFixed(1)+'" x2="'+(110+Math.cos(a)*r2).toFixed(1)+
+             '" y2="'+(110+Math.sin(a)*r2).toFixed(1)+'"/>';
+    }
+    svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
+    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" stroke-dasharray="'+CIRC+'" stroke-dashoffset="0"></circle>';
+    svg += '<line class="hand" id="hand" x1="110" y1="110" x2="110" y2="30"/>';
+    svg += '<circle class="hub" cx="110" cy="110" r="5"/>';
+    svg += '</svg><div class="inset"><div class="digits" id="facedigits">25:00</div></div>';
+    // digits live inside the dial in analog mode
+    face.innerHTML = svg;
+    document.getElementById("digits").style.display = "none";
+  }else{
+    svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
+    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" stroke-dasharray="'+CIRC+'" stroke-dashoffset="0"></circle>';
+    svg += '</svg>';
+    face.innerHTML = svg;
+    document.getElementById("digits").style.display = "";
+  }
+  document.getElementById("tod").style.display = (style === "analog") ? "none" : "";
+  faceBuilt = style;
+  document.getElementById("stylebtn").textContent =
+    style === "analog" ? "Digital" : "Analog";
+}
+
+function renderTod(){
+  var el = document.getElementById("tod");
+  if(el) el.textContent = new Date().toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+}
+
+function renderClock(){
+  var style = state.settings.style;
+  if(faceBuilt !== style) buildFace(style);
+
   var secs = Math.max(0, Math.ceil(remaining));
-  var mm = Math.floor(secs/60), ss = secs%60;
-  var label = pad(mm)+":"+pad(ss);
-  elClock.textContent = label;
+  var label = pad(Math.floor(secs/60))+":"+pad(secs%60);
+
+  var d1 = document.getElementById("digits");
+  var d2 = document.getElementById("facedigits");
+  if(d1) d1.textContent = label;
+  if(d2) d2.textContent = label;
+
   var total = modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
-  elArc.style.strokeDasharray = CIRC;
-  elArc.style.strokeDashoffset = CIRC*(1-frac);
+  var arc = document.getElementById("arc");
+  if(arc){
+    arc.style.strokeDasharray = CIRC;
+    arc.style.strokeDashoffset = CIRC*(1-frac);
+  }
+  var hand = document.getElementById("hand");
+  if(hand){
+    var ang = frac*Math.PI*2 - Math.PI/2;
+    hand.setAttribute("x2", (110+Math.cos(ang)*78).toFixed(1));
+    hand.setAttribute("y2", (110+Math.sin(ang)*78).toFixed(1));
+  }
+
+  renderTod();
   document.getElementById("startstop").textContent = running ? "Pause" : "Start";
-  document.getElementById("subline").textContent = "Today: " + fmtHM(daySeconds(key(new Date())));
+  document.getElementById("todayline").textContent = "Today: " + fmtHM(daySeconds(key(new Date())));
   var done = state.completed % state.settings.cycles;
   document.getElementById("cyclenote").textContent =
     "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
@@ -535,6 +745,46 @@ function renderModeButtons(){
   document.getElementById("m-long").setAttribute("aria-pressed", mode==="longBreak");
 }
 
+/* ---------- full screen ---------- */
+var fsOn = false;
+function setFullscreen(on){
+  fsOn = !!on;
+  document.body.classList.toggle("fs", fsOn);
+  nativeFullscreen(fsOn);
+  if(fsOn){
+    if(document.documentElement.requestFullscreen)
+      document.documentElement.requestFullscreen().catch(function(){});
+    showPage("clock", true);
+  }else{
+    if(document.fullscreenElement && document.exitFullscreen)
+      document.exitFullscreen().catch(function(){});
+  }
+  renderClock();
+}
+document.addEventListener("fullscreenchange", function(){
+  // Leaving via the browser's own gesture should drop our layout too.
+  if(!document.fullscreenElement && fsOn){ fsOn = false; document.body.classList.remove("fs"); nativeFullscreen(false); }
+});
+
+/* ---------- pages ---------- */
+var page = "overview";
+var TITLES = {overview:"Study Clock", clock:"Clock", tasks:"Tasks"};
+function showPage(name, skipFsGuard){
+  if(fsOn && !skipFsGuard) return;
+  page = name;
+  ["overview","clock","tasks"].forEach(function(p){
+    document.getElementById("page-"+p).classList.toggle("on", p === name);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){
+    b.setAttribute("aria-selected", b.getAttribute("data-page") === name);
+  });
+  document.getElementById("pagetitle").textContent = TITLES[name];
+  if(name === "overview"){ renderStats(); renderCalendar(); renderBreakdown(); }
+  if(name === "tasks") renderTasks();
+  if(name === "clock") renderClock();
+}
+
+/* ---------- chips ---------- */
 function renderChips(){
   var wrap = document.getElementById("chips");
   wrap.innerHTML = "";
@@ -546,7 +796,10 @@ function renderChips(){
     b.innerHTML = '<span class="dot"></span>';
     b.appendChild(document.createTextNode(c.name));
     b.addEventListener("click", function(){
-      state.activeCat = c.id; save(true); renderChips(); nativeSync();
+      state.activeCat = c.id;
+      var at = getTask(state.activeTask);
+      if(at && at.catId !== c.id) state.activeTask = null;
+      save(true); renderChips(); renderTasks(); nativeSync();
     });
     wrap.appendChild(b);
   });
@@ -557,13 +810,111 @@ function renderChips(){
   wrap.appendChild(add);
 }
 
+/* ---------- tasks ---------- */
+function visibleTasks(){
+  var today = key(new Date());
+  return state.tasks.filter(function(t){ return !t.done || t.doneDate === today; });
+}
+function renderTasks(){
+  var wrap = document.getElementById("tasklist");
+  var note2 = document.getElementById("tasknote");
+  wrap.innerHTML = "";
+  var list = visibleTasks().slice().sort(function(a,b){
+    if(a.done !== b.done) return a.done ? 1 : -1;
+    return 0;
+  });
+  if(!list.length){
+    note2.textContent = "No tasks yet. Add one and it stays until you tick it off.";
+    return;
+  }
+  list.forEach(function(t){
+    var row = document.createElement("div");
+    row.className = "task" + (t.done ? " done" : "") +
+                    (t.id === state.activeTask && !t.done ? " active" : "");
+
+    var tick2 = document.createElement("button");
+    tick2.className = "tick";
+    tick2.textContent = "\u2713";
+    tick2.setAttribute("aria-label", t.done ? "Mark unfinished" : "Mark done");
+    tick2.addEventListener("click", function(){
+      t.done = !t.done;
+      t.doneDate = t.done ? key(new Date()) : null;
+      if(t.done && state.activeTask === t.id) state.activeTask = null;
+      save(true); renderTasks(); renderBreakdown(); nativeSync();
+    });
+
+    var name = document.createElement("button");
+    name.className = "tname";
+    name.textContent = t.text;
+    name.title = t.done ? t.text : "Log time against this";
+    name.addEventListener("click", function(){
+      if(t.done) return;
+      state.activeTask = (state.activeTask === t.id) ? null : t.id;
+      if(state.activeTask) state.activeCat = t.catId;
+      save(true); renderTasks(); renderChips(); nativeSync();
+    });
+
+    var meta = document.createElement("span");
+    meta.className = "tmeta";
+    var secs = taskSeconds(t.id);
+    if(secs > 0){
+      var tt = document.createElement("span");
+      tt.className = "tt"; tt.textContent = fmtHM(secs); tt.title = "Total time logged";
+      meta.appendChild(tt);
+    }
+    var dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = catColor(t.catId);
+    dot.title = catName(t.catId);
+    meta.appendChild(dot);
+
+    var del = document.createElement("button");
+    del.className = "tdel";
+    del.innerHTML = "&times;";
+    del.setAttribute("aria-label", "Remove task");
+    del.addEventListener("click", function(){
+      var logged = taskSeconds(t.id);
+      if(logged > 0 && !confirm("Remove \"" + t.text + "\"? Its " + fmtHM(logged) +
+         " stays in your category totals.")) return;
+      state.tasks = state.tasks.filter(function(x){ return x.id !== t.id; });
+      if(state.activeTask === t.id) state.activeTask = null;
+      save(true); renderTasks(); renderBreakdown(); nativeSync();
+    });
+
+    row.appendChild(tick2); row.appendChild(name);
+    row.appendChild(meta); row.appendChild(del);
+    wrap.appendChild(row);
+  });
+
+  var doneToday = list.filter(function(t){ return t.done; }).length;
+  var bits = [];
+  var at = getTask(state.activeTask);
+  bits.push(at ? "Logging to " + at.text : "Tap a task to log time against it");
+  if(doneToday) bits.push(doneToday + " done today");
+  note2.textContent = bits.join(" \u00b7 ");
+}
+function addTask(){
+  var inp = document.getElementById("newtask");
+  var text = inp.value.trim();
+  if(!text){ inp.focus(); return; }
+  state.tasks.push({
+    id:"t"+Date.now().toString(36), text:text,
+    catId:state.activeCat, done:false, doneDate:null
+  });
+  inp.value = "";
+  save(true); renderTasks();
+}
+
+/* ---------- stats & calendar ---------- */
+var viewY, viewM, selectedDay = null;
+
 function renderStats(){
   var today = new Date();
   var weekStart = new Date(today); weekStart.setDate(today.getDate()-mondayIndex(today));
-  var wk = 0, mo = 0, days = 0, all = 0;
+  weekStart.setHours(0,0,0,0);
+  var wk = 0, mo = 0, days = 0;
   for(var k in state.days){
     var s = daySeconds(k), d = parseKey(k);
-    all += s;
     if(d >= weekStart && d <= today) wk += s;
     if(d.getFullYear()===viewY && d.getMonth()===viewM){ mo += s; if(s>0) days++; }
   }
@@ -571,7 +922,15 @@ function renderStats(){
   document.getElementById("s-week").textContent = fmtShort(wk);
   document.getElementById("s-month").textContent = fmtShort(mo);
   document.getElementById("s-days").textContent = days;
-  document.getElementById("lifetime").textContent = fmtHM(all);
+}
+
+function shade(f){
+  var lo = getComputedStyle(document.documentElement).getPropertyValue("--heat-lo").split(",");
+  var hi = getComputedStyle(document.documentElement).getPropertyValue("--heat-hi").split(",");
+  var r = Math.round(+lo[0] + (+hi[0] - +lo[0])*f);
+  var g = Math.round(+lo[1] + (+hi[1] - +lo[1])*f);
+  var b = Math.round(+lo[2] + (+hi[2] - +lo[2])*f);
+  return "rgb("+r+","+g+","+b+")";
 }
 
 function renderCalendar(){
@@ -589,9 +948,9 @@ function renderCalendar(){
     blank.className = "day blank";
     grid.appendChild(blank);
   }
-  for(var d=1; d<=dim; d++){
-    (function(d){
-      var k = viewY+"-"+pad(viewM+1)+"-"+pad(d);
+  for(var dd=1; dd<=dim; dd++){
+    (function(dnum){
+      var k = viewY+"-"+pad(viewM+1)+"-"+pad(dnum);
       var s = daySeconds(k);
       var b = document.createElement("button");
       b.className = "day" + (s>0 ? " filled":"") + (k===todayKey ? " today":"");
@@ -601,36 +960,33 @@ function renderCalendar(){
         b.style.background = shade(f);
         b.style.borderColor = shade(Math.min(1, f+0.15));
       }
-      b.innerHTML = '<span class="dn">'+d+'</span>' +
-                    (s>0 ? '<span class="dh">'+fmtShort(s)+'</span>' : '');
+      b.innerHTML = '<span class="dn">'+dnum+'</span>' + (s>0 ? '<span class="dh">'+fmtShort(s)+'</span>' : '');
       b.setAttribute("aria-label", k + ", " + fmtHM(s));
       b.addEventListener("click", function(){
         selectedDay = (selectedDay === k) ? null : k;
         renderCalendar(); renderBreakdown();
       });
       grid.appendChild(b);
-    })(d);
+    })(dd);
   }
 }
-function shade(f){
-  // pale green to deep green
-  var a = [220,234,229], b = [22,86,71];
-  var r = Math.round(a[0]+(b[0]-a[0])*f);
-  var g = Math.round(a[1]+(b[1]-a[1])*f);
-  var bl= Math.round(a[2]+(b[2]-a[2])*f);
-  return "rgb("+r+","+g+","+bl+")";
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
 }
 
 function renderBreakdown(){
   var title = document.getElementById("bdtitle");
   var body = document.getElementById("bdbody");
-  var totals = {}, grand = 0;
+  var totals = {}, grand = 0, id;
 
   if(selectedDay){
     title.textContent = parseKey(selectedDay).toLocaleDateString(undefined,
       {weekday:"long", day:"numeric", month:"long", year:"numeric"});
     var rec = state.days[selectedDay] || {};
-    for(var id in rec){ totals[id] = rec[id]; grand += rec[id]; }
+    for(id in rec){ totals[id] = rec[id]; grand += rec[id]; }
   }else{
     title.textContent = monthName(viewY, viewM);
     for(var k in state.days){
@@ -649,31 +1005,45 @@ function renderBreakdown(){
     body.appendChild(p);
     return;
   }
+
   var head = document.createElement("div");
   head.className = "bar";
-  head.innerHTML = '<span class="nm" style="font-weight:600">Total</span>' +
-                   '<span class="track"></span>' +
+  head.innerHTML = '<span class="nm" style="font-weight:600">Total</span><span class="track"></span>' +
                    '<span class="v" style="font-weight:600;color:var(--ink)">'+fmtHM(grand)+'</span>';
   body.appendChild(head);
 
-  Object.keys(totals).sort(function(a,b){return totals[b]-totals[a];}).forEach(function(id){
+  Object.keys(totals).sort(function(a,b){return totals[b]-totals[a];}).forEach(function(cid){
     var row = document.createElement("div");
     row.className = "bar";
-    var pct = Math.round(totals[id]/grand*100);
-    row.innerHTML = '<span class="nm">'+escapeHtml(catName(id))+'</span>' +
-      '<span class="track"><span class="fill" style="width:'+pct+'%;background:'+catColor(id)+'"></span></span>' +
-      '<span class="v">'+fmtHM(totals[id])+'</span>';
+    var pct = Math.round(totals[cid]/grand*100);
+    row.innerHTML = '<span class="nm">'+escapeHtml(catName(cid))+'</span>' +
+      '<span class="track"><span class="fill" style="width:'+pct+'%;background:'+catColor(cid)+'"></span></span>' +
+      '<span class="v">'+fmtHM(totals[cid])+'</span>';
     body.appendChild(row);
-  });
-}
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, function(c){
-    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+
+    var sub = [];
+    state.tasks.forEach(function(t){
+      if(t.catId !== cid) return;
+      var ts = selectedDay ? taskSeconds(t.id, undefined, undefined, selectedDay)
+                           : taskSeconds(t.id, viewY, viewM);
+      if(ts > 0) sub.push({text:t.text, secs:ts, done:t.done});
+    });
+    sub.sort(function(a,b){ return b.secs - a.secs; });
+    sub.forEach(function(x){
+      var r = document.createElement("div");
+      r.className = "bar subrow";
+      var p2 = Math.round(x.secs/grand*100);
+      r.innerHTML = '<span class="nm">'+(x.done ? "\u2713 " : "")+escapeHtml(x.text)+'</span>' +
+        '<span class="track"><span class="fill" style="width:'+p2+'%;background:'+catColor(cid)+';opacity:.45"></span></span>' +
+        '<span class="v">'+fmtHM(x.secs)+'</span>';
+      body.appendChild(r);
+    });
   });
 }
 
 function renderAll(){
-  renderTimer(); renderModeButtons(); renderChips();
+  applyTheme();
+  renderClock(); renderModeButtons(); renderChips(); renderTasks();
   renderStats(); renderCalendar(); renderBreakdown();
 }
 
@@ -685,6 +1055,8 @@ document.getElementById("open-settings").addEventListener("click", function(){
   document.getElementById("in-long").value = state.settings.longBreak;
   document.getElementById("in-cycles").value = state.settings.cycles;
   document.getElementById("in-goal").value = state.settings.goal;
+  document.getElementById("in-style").value = state.settings.style;
+  document.getElementById("in-theme").value = state.settings.theme;
   document.getElementById("in-auto").checked = state.settings.auto;
   document.getElementById("in-sound").checked = state.settings.sound;
   dlgSettings.showModal();
@@ -693,14 +1065,15 @@ document.getElementById("set-cancel").addEventListener("click", function(){ dlgS
 document.getElementById("set-save").addEventListener("click", function(){
   function num(id, lo, hi, dflt){
     var v = parseFloat(document.getElementById(id).value);
-    if(isNaN(v) || v < lo || v > hi) return dflt;
-    return v;
+    return (isNaN(v) || v < lo || v > hi) ? dflt : v;
   }
   state.settings.focus      = Math.round(num("in-focus",1,180,state.settings.focus));
   state.settings.shortBreak = Math.round(num("in-short",1,60,state.settings.shortBreak));
   state.settings.longBreak  = Math.round(num("in-long",1,120,state.settings.longBreak));
   state.settings.cycles     = Math.round(num("in-cycles",1,12,state.settings.cycles));
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
+  state.settings.style      = document.getElementById("in-style").value;
+  state.settings.theme      = document.getElementById("in-theme").value;
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
   if(!running) remaining = modeSeconds(mode);
@@ -709,6 +1082,9 @@ document.getElementById("set-save").addEventListener("click", function(){
 
 var dlgCats = document.getElementById("dlg-cats");
 function openCats(){ renderCatList(); dlgCats.showModal(); }
+document.getElementById("open-cats").addEventListener("click", function(){
+  dlgSettings.close(); openCats();
+});
 function renderCatList(){
   var list = document.getElementById("catlist");
   list.innerHTML = "";
@@ -742,8 +1118,7 @@ document.getElementById("cat-add").addEventListener("click", function(){
   var name = inp.value.trim();
   if(!name){ inp.focus(); return; }
   var id = "c" + Date.now().toString(36);
-  var used = state.categories.length;
-  state.categories.push({id:id, name:name, color:PALETTE[used % PALETTE.length], archived:false});
+  state.categories.push({id:id, name:name, color:PALETTE[state.categories.length % PALETTE.length], archived:false});
   if(!state.activeCat) state.activeCat = id;
   inp.value = "";
   save(true); renderCatList(); renderAll();
@@ -782,8 +1157,7 @@ document.getElementById("export").addEventListener("click", function(){
   var blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");
-  a.href = url;
-  a.download = "study-clock-backup-" + key(new Date()) + ".json";
+  a.href = url; a.download = "study-clock-backup-" + key(new Date()) + ".json";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 });
@@ -799,9 +1173,13 @@ document.getElementById("filein").addEventListener("change", function(ev){
       var d = JSON.parse(r.result);
       if(!d || !d.days) throw new Error("bad file");
       if(!confirm("Replace everything currently in this app with the backup?")) return;
-      state.settings = Object.assign(state.settings, d.settings||{});
+      Object.assign(state.settings, d.settings||{});
       if(Array.isArray(d.categories) && d.categories.length) state.categories = d.categories;
-      state.days = d.days; state.completed = d.completed||0;
+      state.days = d.days;
+      state.taskTime = (d.taskTime && typeof d.taskTime === "object") ? d.taskTime : {};
+      state.tasks = Array.isArray(d.tasks) ? d.tasks : [];
+      state.activeTask = d.activeTask || null;
+      state.completed = d.completed || 0;
       state.activeCat = d.activeCat || state.categories[0].id;
       running = false; setMode("focus", false);
       save(true); renderAll(); note("Backup restored.");
@@ -817,6 +1195,17 @@ document.getElementById("reset").addEventListener("click", resetBlock);
 document.getElementById("m-focus").addEventListener("click", function(){ setMode("focus", false); });
 document.getElementById("m-short").addEventListener("click", function(){ setMode("shortBreak", false); });
 document.getElementById("m-long").addEventListener("click", function(){ setMode("longBreak", false); });
+document.getElementById("themebtn").addEventListener("click", cycleTheme);
+document.getElementById("fsbtn").addEventListener("click", function(){ setFullscreen(true); });
+document.getElementById("exitfs").addEventListener("click", function(){ setFullscreen(false); });
+document.getElementById("stylebtn").addEventListener("click", function(){
+  state.settings.style = (state.settings.style === "analog") ? "digital" : "analog";
+  save(true); renderClock();
+});
+document.getElementById("addtask").addEventListener("click", addTask);
+document.getElementById("newtask").addEventListener("keydown", function(e){
+  if(e.key === "Enter") addTask();
+});
 document.getElementById("prev").addEventListener("click", function(){
   viewM--; if(viewM<0){ viewM=11; viewY--; }
   selectedDay = null; renderStats(); renderCalendar(); renderBreakdown();
@@ -825,14 +1214,42 @@ document.getElementById("next").addEventListener("click", function(){
   viewM++; if(viewM>11){ viewM=0; viewY++; }
   selectedDay = null; renderStats(); renderCalendar(); renderBreakdown();
 });
+Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){
+  b.addEventListener("click", function(){ showPage(b.getAttribute("data-page")); });
+});
 document.addEventListener("keydown", function(e){
   if(e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   if(document.querySelector("dialog[open]")) return;
   if(e.code === "Space"){ e.preventDefault(); toggle(); }
-  if(e.key === "r" || e.key === "R"){ resetBlock(); }
+  else if(e.key === "r" || e.key === "R"){ resetBlock(); }
+  else if(e.key === "f" || e.key === "F"){ setFullscreen(!fsOn); }
+  else if(e.key === "Escape" && fsOn){ setFullscreen(false); }
+});
+// Tapping in full screen reveals the controls for a few seconds.
+document.getElementById("clockwrap").addEventListener("click", function(){
+  if(!fsOn) return;
+  document.body.classList.add("touched");
+  clearTimeout(window.__touchT);
+  window.__touchT = setTimeout(function(){ document.body.classList.remove("touched"); }, 3000);
 });
 window.addEventListener("beforeunload", function(){ save(true); });
 document.addEventListener("visibilitychange", function(){ if(document.hidden) save(true); });
+
+/* ---------- wake lock ---------- */
+var wakeLock = null;
+function updateWakeLock(){
+  if(!("wakeLock" in navigator)) return;
+  var want = (running || fsOn) && !document.hidden;
+  if(want && !wakeLock){
+    navigator.wakeLock.request("screen").then(function(wl){
+      wakeLock = wl;
+      wl.addEventListener("release", function(){ wakeLock = null; });
+    }).catch(function(){});
+  }else if(!want && wakeLock){
+    wakeLock.release().catch(function(){});
+    wakeLock = null;
+  }
+}
 
 /* ---------- go ---------- */
 load();
@@ -840,34 +1257,20 @@ var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
 remaining = modeSeconds("focus");
 lastTick = Date.now();
+applyTheme();
 renderAll();
+showPage("clock");
 nativeSync();
 setInterval(tick, 250);
-
-/* Keep the screen awake while a block is running, and let it sleep otherwise. */
-var wakeLock = null;
-function updateWakeLock(){
-  if(!("wakeLock" in navigator)) return;
-  if(running && !document.hidden && !wakeLock){
-    navigator.wakeLock.request("screen").then(function(wl){
-      wakeLock = wl;
-      wl.addEventListener("release", function(){ wakeLock = null; });
-    }).catch(function(){ /* denied or unsupported */ });
-  }else if((!running || document.hidden) && wakeLock){
-    wakeLock.release().catch(function(){});
-    wakeLock = null;
-  }
-}
+setInterval(function(){ renderStats(); renderCalendar(); }, 60000);
 setInterval(updateWakeLock, 1000);
 document.addEventListener("visibilitychange", updateWakeLock);
 
-/* Offline support. Only works over http(s), not from a file:// copy. */
 if("serviceWorker" in navigator && location.protocol.indexOf("http") === 0){
   window.addEventListener("load", function(){
     navigator.serviceWorker.register("sw.js").catch(function(){});
   });
 }
-setInterval(function(){ renderStats(); renderCalendar(); }, 60000);
 
 })();
 </script>
