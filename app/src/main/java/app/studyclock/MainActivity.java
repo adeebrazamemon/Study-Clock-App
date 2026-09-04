@@ -44,13 +44,30 @@ public class MainActivity extends AppCompatActivity {
 
         askForNotificationPermission();
 
+        // Buttons on the ongoing notification call straight into the page.
+        TimerService.setCommandListener(new TimerService.CommandListener() {
+            @Override public void onCommand(String cmd) { callWeb(cmd); }
+        });
+
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() {
                 if (immersive) {
                     // Leave full screen rather than the app.
-                    web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));", null);
+                    callWeb("exitfs");
                 } else {
                     moveTaskToBack(true);
+                }
+            }
+        });
+    }
+
+    /** Run one of the page's commands: toggle, skip, exitfs. */
+    private void callWeb(final String cmd) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (web != null) {
+                    web.evaluateJavascript(
+                            "window.__nativeCmd && window.__nativeCmd('" + cmd + "');", null);
                 }
             }
         });
@@ -66,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** Hide or restore the status and navigation bars. */
-    public void setImmersive(boolean on) {
+    private void setImmersive(boolean on) {
         immersive = on;
         View decor = getWindow().getDecorView();
         WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), decor);
