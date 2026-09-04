@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 
 import androidx.core.app.NotificationCompat;
@@ -24,6 +25,11 @@ public class TimerService extends Service {
     public static final String ACTION_START = "app.studyclock.START";
     public static final String ACTION_TOGGLE = "app.studyclock.TOGGLE";
     public static final String ACTION_SKIP = "app.studyclock.SKIP";
+    public static final String ACTION_STOP = "app.studyclock.STOP";
+
+    /* Set with the raw key rather than the API-36 setter, so this compiles on any SDK.
+       Devices that do not know it ignore it and show a normal ongoing notification. */
+    private static final String EXTRA_PROMOTED = "android.requestPromotedOngoing";
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
 
@@ -78,6 +84,11 @@ public class TimerService extends Service {
             if (listener != null) listener.onCommand("toggle");
         } else if (ACTION_SKIP.equals(action)) {
             if (listener != null) listener.onCommand("skip");
+        } else if (ACTION_STOP.equals(action)) {
+            if (listener != null) listener.onCommand("stop");
+            stopForeground(true);
+            stopSelf();
+            return START_NOT_STICKY;
         }
         startForeground(ID_ONGOING, build());
         // Restart if Android kills us under memory pressure.
@@ -117,6 +128,12 @@ public class TimerService extends Service {
 
         b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
         b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
+        b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
+
+        Bundle promote = new Bundle();
+        promote.putBoolean(EXTRA_PROMOTED, true);
+        b.addExtras(promote);
+
         return b.build();
     }
 
