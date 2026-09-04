@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -13,10 +15,14 @@ import android.webkit.WebViewClient;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView web;
+    private boolean immersive = false;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -27,9 +33,9 @@ public class MainActivity extends AppCompatActivity {
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);              // localStorage lives here
+        s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture(false);  // so the end-of-block chime plays
+        s.setMediaPlaybackRequiresUserGesture(false);
         s.setSupportZoom(false);
 
         web.setWebViewClient(new WebViewClient());
@@ -38,10 +44,14 @@ public class MainActivity extends AppCompatActivity {
 
         askForNotificationPermission();
 
-        // Back button hides the app instead of killing it, so the timer keeps running.
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() {
-                moveTaskToBack(true);
+                if (immersive) {
+                    // Leave full screen rather than the app.
+                    web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));", null);
+                } else {
+                    moveTaskToBack(true);
+                }
             }
         });
     }
@@ -55,14 +65,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Methods here are callable from JavaScript as window.AndroidTimer.*  */
+    /** Hide or restore the status and navigation bars. */
+    private void setImmersive(boolean on) {
+        immersive = on;
+        View decor = getWindow().getDecorView();
+        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), decor);
+        if (on) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            c.setSystemBarsBehavior(
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            c.hide(WindowInsetsCompat.Type.systemBars());
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            c.show(WindowInsetsCompat.Type.systemBars());
+        }
+    }
+
     private class Bridge {
 
-        /**
-         * Called when a block starts, or when its end time changes.
-         * endTime is epoch millis. The notification counts down to it by itself,
-         * so this does not need calling every second.
-         */
         @JavascriptInterface
         public void startTimer(final String endTime, final String label) {
             final long end;
@@ -82,7 +102,6 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        /** Called on pause, reset, or when nothing is running. */
         @JavascriptInterface
         public void stopTimer() {
             runOnUiThread(new Runnable() {
@@ -92,7 +111,6 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        /** Called the moment a block finishes, so you get an alert even from the lock screen. */
         @JavascriptInterface
         public void blockDone(final String title, final String body) {
             runOnUiThread(new Runnable() {
@@ -102,7 +120,14 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        /** Lets the web app know it is running inside the Android build. */
+        /** Called by the page when full screen is entered or left. */
+        @JavascriptInterface
+        public void setFullscreen(final boolean on) {
+            runOnUiThread(new Runnable() {
+                @Override public void run() { setImmersive(on); }
+            });
+        }
+
         @JavascriptInterface
         public boolean isNative() {
             return true;
