@@ -404,6 +404,7 @@
   <div class="dtabs">
     <button data-pane="gen" aria-selected="true">General</button>
     <button data-pane="app" aria-selected="false">Appearance</button>
+    <button data-pane="sync" aria-selected="false">Sync</button>
   </div>
 
   <div class="dpane on" id="pane-gen">
@@ -446,6 +447,13 @@
     <div class="field"><label for="in-tod">Show the current time</label><input type="checkbox" id="in-tod"></div>
   </div>
 
+  <div class="dpane" id="pane-sync">
+    <p class="hint">Sign in to sync your tasks, categories, and stats across
+      every device you use. Nothing here leaves your device unless you
+      sign in — the running timer itself always stays local to each device.</p>
+    <div id="sync-box"></div>
+  </div>
+
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
   </div>
@@ -480,6 +488,13 @@
 </dialog>
 
 <input type="file" id="filein" accept="application/json,.json" style="display:none">
+
+<!-- Compat build, not the modular SDK: this page has no bundler, so it needs
+     a plain global `firebase` namespace rather than ES module imports.
+     Inert if the network is unreachable; sync just quietly stays unavailable. -->
+<script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore-compat.js"></script>
 
 <script>
 (function(){
@@ -533,12 +548,130 @@ function save(now){
   if(!now){ saveTimer = setTimeout(function(){ save(true); }, 1500); return; }
   try{ localStorage.setItem(KEY, JSON.stringify(state)); }
   catch(e){ note("Could not save. Storage may be full or blocked."); }
+  pushSync();
 }
 function note(msg){
   var el = document.getElementById("savenote");
   if(!el) return;
   el.textContent = msg;
   if(msg) setTimeout(function(){ if(el.textContent === msg) el.textContent = ""; }, 5000);
+}
+
+/* ---------- cloud sync ----------
+   Entirely optional and additive: with nobody signed in this is all a
+   no-op and the app behaves exactly as it did with just localStorage.
+   Only the state blob above syncs (categories/tasks/stats/settings) -
+   the live running timer (mode/running/remaining) always stays local to
+   whichever device is actually running a block, so two open devices never
+   fight over whose countdown is "right". */
+var firebaseConfig = {
+  apiKey: "AIzaSyCleiRCg-pmRQLW4xU0120KO8eAFwfnk0g",
+  authDomain: "study-clock-app.firebaseapp.com",
+  projectId: "study-clock-app",
+  storageBucket: "study-clock-app.firebasestorage.app",
+  messagingSenderId: "118951224761",
+  appId: "1:118951224761:web:5db311db8e472b0e758268"
+};
+
+var SYNC = typeof firebase !== "undefined";
+var fbAuth = null, fbDb = null, syncUser = null, syncUnsub = null;
+/* True while a remote snapshot is being written into local state, so the
+   save() it triggers doesn't turn around and push straight back out. */
+var applyingRemote = false;
+var pushTimer = null;
+
+/* Firestore's SDK throws on a literal `undefined` field value; round-tripping
+   through JSON (same trick save() already uses for localStorage) strips
+   those the same way it would before a plain JSON.stringify anyway. */
+function syncPayload(){ return JSON.parse(JSON.stringify(state)); }
+
+function initSync(){
+  if(!SYNC) return;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+  }catch(e){ SYNC = false; return; }
+
+  fbAuth.onAuthStateChanged(function(user){
+    syncUser = user;
+    renderSyncUI();
+    if(syncUnsub){ syncUnsub(); syncUnsub = null; }
+    if(!user) return;
+
+    var ref = fbDb.collection("users").doc(user.uid);
+    ref.get().then(function(snap){
+      if(snap.exists){
+        applyRemoteState(snap.data());
+      }else{
+        // First device ever to sync this account: seed the cloud from here.
+        ref.set(syncPayload()).catch(function(){});
+      }
+      syncUnsub = ref.onSnapshot(function(snap){
+        // Ignore the local echo of our own pending write; only react once
+        // a change has actually round-tripped through the server (i.e. it
+        // came from another device, or confirms this one's own write).
+        if(snap.metadata.hasPendingWrites) return;
+        if(snap.exists) applyRemoteState(snap.data());
+      });
+    }).catch(function(){ note("Could not reach sync."); });
+  });
+}
+
+function applyRemoteState(d){
+  if(!d || typeof d !== "object") return;
+  applyingRemote = true;
+  if(d.settings) Object.assign(state.settings, d.settings);
+  if(Array.isArray(d.categories)) state.categories = d.categories;
+  if(d.days && typeof d.days === "object") state.days = d.days;
+  if(d.taskTime && typeof d.taskTime === "object") state.taskTime = d.taskTime;
+  if(Array.isArray(d.tasks)) state.tasks = d.tasks;
+  if("activeTask" in d) state.activeTask = d.activeTask;
+  if(typeof d.completed === "number") state.completed = d.completed;
+  if(d.activeCat) state.activeCat = d.activeCat;
+  save(true);
+  renderAll();
+  applyingRemote = false;
+}
+
+function pushSync(){
+  if(!SYNC || !syncUser || applyingRemote) return;
+  if(pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(function(){
+    fbDb.collection("users").doc(syncUser.uid).set(syncPayload()).catch(function(){});
+  }, 1500);
+}
+
+function signIn(){
+  if(!SYNC) return;
+  fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+    .catch(function(){ note("Sign-in failed."); });
+}
+function signOutSync(){
+  if(SYNC) fbAuth.signOut();
+}
+
+function renderSyncUI(){
+  var box = document.getElementById("sync-box");
+  if(!box) return;
+  if(!SYNC){
+    box.innerHTML = '<p class="hint">Sync isn\'t reachable right now.</p>';
+    return;
+  }
+  if(syncUser){
+    var name = syncUser.displayName || syncUser.email || "your account";
+    box.innerHTML =
+      '<p>Signed in as <strong></strong>. Synced.</p>' +
+      '<button id="sync-out">Sign out</button>';
+    box.querySelector("strong").textContent = name;
+    document.getElementById("sync-out").addEventListener("click", signOutSync);
+  }else{
+    box.innerHTML = '<button class="primary" id="sync-in">Sign in with Google</button>' +
+      (NATIVE ? '<p class="hint">Google blocks its sign-in inside an embedded ' +
+        'app view like this one, so this won’t work here yet — use the web ' +
+        'version to sync for now.</p>' : '');
+    document.getElementById("sync-in").addEventListener("click", signIn);
+  }
 }
 
 /* ---------- dates ---------- */
@@ -1238,6 +1371,7 @@ document.getElementById("open-settings").addEventListener("click", function(){
   document.getElementById("in-sound").checked = state.settings.sound;
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
   document.getElementById("in-tod").checked = state.settings.showTod !== false;
+  renderSyncUI();
   dlgSettings.showModal();
 });
 
@@ -1257,6 +1391,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), functio
     });
     document.getElementById("pane-gen").classList.toggle("on", want === "gen");
     document.getElementById("pane-app").classList.toggle("on", want === "app");
+    document.getElementById("pane-sync").classList.toggle("on", want === "sync");
   });
 });
 
@@ -1462,6 +1597,7 @@ function updateWakeLock(){
 
 /* ---------- go ---------- */
 load();
+initSync();
 var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
 remaining = modeSeconds("focus");
