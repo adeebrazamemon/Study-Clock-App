@@ -17,7 +17,8 @@ import androidx.core.app.NotificationManagerCompat;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Owns the running block rather than only drawing it.
@@ -327,17 +328,31 @@ public class TimerService extends Service {
         }
 
         if (totalMs > 0) {
+            // A segment is drawn fully in its own color for its own length,
+            // full stop -- it is not a fill level, and setProgress() only
+            // positions a tracker icon we never set. One segment spanning
+            // the whole bar is why this used to render as permanently 100%.
+            // Two segments -- remaining, then already-elapsed -- and
+            // shrinking/growing their lengths over time is what actually
+            // animates the bar.
             long remainingNow = paused ? pausedRemaining
                     : Math.max(0L, endTime - System.currentTimeMillis());
             int totalSec = (int) Math.max(1L, totalMs / 1000L);
-            int elapsedSec = (int) Math.min(totalSec,
-                    Math.max(0L, (totalMs - remainingNow) / 1000L));
+            int remainingSec = (int) Math.max(0L, Math.min(totalSec, remainingNow / 1000L));
+            int elapsedSec = totalSec - remainingSec;
+
+            List<NotificationCompat.ProgressStyle.Segment> segments = new ArrayList<>(2);
+            if (remainingSec > 0) {
+                segments.add(new NotificationCompat.ProgressStyle.Segment(remainingSec)
+                        .setColor(progressColor()));
+            }
+            if (elapsedSec > 0) {
+                segments.add(new NotificationCompat.ProgressStyle.Segment(elapsedSec)
+                        .setColor(getColor(R.color.paper)));
+            }
             b.setStyle(new NotificationCompat.ProgressStyle()
                     .setStyledByProgress(false)
-                    .setProgressSegments(Collections.singletonList(
-                            new NotificationCompat.ProgressStyle.Segment(totalSec)
-                                    .setColor(progressColor())))
-                    .setProgress(elapsedSec));
+                    .setProgressSegments(segments));
         }
 
         b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
