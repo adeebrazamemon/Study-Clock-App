@@ -93,6 +93,10 @@
      a caption below the clock (see buildFace(), which moves this same
      element between the two spots rather than duplicating it). */
   .digits.inset{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0}
+  /* The analog caption doesn't need to compete with the clock face for
+     attention, so it's a plain small label rather than the same bold
+     display-sized number the ring uses. */
+  .digits:not(.inset){font-size:18px;font-weight:500;letter-spacing:0;color:var(--muted);margin-top:10px}
   .tod{color:var(--muted);font-size:14px;margin-top:9px;font-variant-numeric:tabular-nums}
   .todayline{color:var(--muted);font-size:13.5px;margin-top:3px}
   .controls{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
@@ -120,13 +124,17 @@
     align-items:center;justify-content:center;background:var(--bg);padding:24px;
   }
   body.fs .face{width:58vmin;height:58vmin}
-  /* Full screen is a clean hands/ring-only view -- renderClock() always
-     hides .digits here regardless of the "Show time left" setting. */
+  /* .inset (digital, centered inside the ring) needs a size that actually
+     fits the ring; the analog caption below has room to run bigger. */
+  body.fs .digits{font-size:15vmin}
+  body.fs .digits.inset{font-size:9vmin}
   body.fs .tod{font-size:4vmin;margin-top:2vmin}
   body.fs.analog .face{width:74vmin;height:74vmin}
   @media (orientation:landscape){
     body.fs .clockwrap{padding:2vh 4vw}
     body.fs .face{width:52vmin;height:52vmin}
+    body.fs .digits{font-size:13vmin;margin-top:1vh}
+    body.fs .digits.inset{font-size:8vmin;margin-top:0}
     body.fs.analog .face{width:78vmin;height:78vmin}
   }
 
@@ -135,6 +143,7 @@
   .digits.d-mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:0}
   .digits.d-thin{font-weight:200;letter-spacing:.01em}
   .digits.d-outline{color:transparent;-webkit-text-stroke:2px var(--focus);paint-order:stroke}
+  body.fs .digits.d-outline{-webkit-text-stroke-width:3px}
 
   body.fs .controls{margin-top:26px;opacity:.25;transition:opacity .25s}
   body.fs .clockwrap:hover .controls,body.fs .controls:focus-within{opacity:1}
@@ -332,8 +341,6 @@
 
     <div class="footer">
       <button id="open-manual">Add time manually</button>
-      <button id="export">Back up data</button>
-      <button id="import">Restore from backup</button>
       <span id="savenote"></span>
     </div>
   </div>
@@ -490,8 +497,6 @@
   </div>
 </dialog>
 
-<input type="file" id="filein" accept="application/json,.json" style="display:none">
-
 <!-- Compat build, not the modular SDK: this page has no bundler, so it needs
      a plain global `firebase` namespace rather than ES module imports.
      Inert if the network is unreachable; sync just quietly stays unavailable. -->
@@ -513,8 +518,7 @@ var state = {
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true},
   categories:[
     {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
-    {id:"c2",name:"Research",color:PALETTE[1],archived:false},
-    {id:"c3",name:"Clinical",color:PALETTE[2],archived:false}
+    {id:"c2",name:"Research",color:PALETTE[1],archived:false}
   ],
   activeCat:"c1",
   days:{},          // "2026-09-04": { c1: seconds }
@@ -967,8 +971,7 @@ function renderClock(){
 
   var digits = document.getElementById("digits");
   digits.textContent = label;
-  // Full screen is always hands/ring-only, regardless of the setting.
-  digits.style.display = (fsOn || state.settings.showTimeLeft === false) ? "none" : "";
+  digits.style.display = (state.settings.showTimeLeft === false) ? "none" : "";
 
   var total = modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
@@ -1492,43 +1495,6 @@ function manualApply(sign){
 }
 document.getElementById("man-add").addEventListener("click", function(){ manualApply(1); });
 document.getElementById("man-subtract").addEventListener("click", function(){ manualApply(-1); });
-
-/* ---------- backup ---------- */
-document.getElementById("export").addEventListener("click", function(){
-  var blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement("a");
-  a.href = url; a.download = "study-clock-backup-" + key(new Date()) + ".json";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
-});
-document.getElementById("import").addEventListener("click", function(){
-  document.getElementById("filein").click();
-});
-document.getElementById("filein").addEventListener("change", function(ev){
-  var f = ev.target.files && ev.target.files[0];
-  if(!f) return;
-  var r = new FileReader();
-  r.onload = function(){
-    try{
-      var d = JSON.parse(r.result);
-      if(!d || !d.days) throw new Error("bad file");
-      if(!confirm("Replace everything currently in this app with the backup?")) return;
-      Object.assign(state.settings, d.settings||{});
-      if(Array.isArray(d.categories) && d.categories.length) state.categories = d.categories;
-      state.days = d.days;
-      state.taskTime = (d.taskTime && typeof d.taskTime === "object") ? d.taskTime : {};
-      state.tasks = Array.isArray(d.tasks) ? d.tasks : [];
-      state.activeTask = d.activeTask || null;
-      state.completed = d.completed || 0;
-      state.activeCat = d.activeCat || state.categories[0].id;
-      running = false; setMode("focus", false); nativeStop();
-      save(true); renderAll(); note("Backup restored.");
-    }catch(e){ note("That file is not a Study Clock backup."); }
-  };
-  r.readAsText(f);
-  ev.target.value = "";
-});
 
 /* ---------- wiring ---------- */
 document.getElementById("startstop").addEventListener("click", toggle);

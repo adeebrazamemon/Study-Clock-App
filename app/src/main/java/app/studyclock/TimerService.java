@@ -39,11 +39,9 @@ public class TimerService extends Service {
     public static final String ACTION_SKIP = "app.studyclock.SKIP";
     public static final String ACTION_STOP = "app.studyclock.STOP";
     public static final String ACTION_BLOCK_END = "app.studyclock.BLOCK_END";
-    /** Refreshes the notification (mainly the progress bar) every PROGRESS_TICK_MS.
-        15s rather than something coarser: a 5-minute short break only has 20
-        steps at this rate, and would look all but frozen at a slower one. */
+    /** Refreshes the notification (mainly the progress bar) every PROGRESS_TICK_MS. */
     private static final String ACTION_TICK = "app.studyclock.TICK";
-    private static final long PROGRESS_TICK_MS = 15_000L;
+    private static final long PROGRESS_TICK_MS = 5_000L;
 
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
