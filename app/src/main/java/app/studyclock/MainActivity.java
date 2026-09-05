@@ -102,22 +102,45 @@ public class MainActivity extends AppCompatActivity {
 
     private class Bridge {
 
+        /**
+         * nextLabel and nextMs are one block of lookahead, so the service can roll
+         * over on its own when the page is throttled in the background.
+         */
         @JavascriptInterface
-        public void startTimer(final String endTime, final String label) {
+        public void startTimer(final String endTime, final String label,
+                               final String nextLabel, final String nextMs,
+                               final boolean auto) {
             final long end;
             try { end = Long.parseLong(endTime); } catch (Exception e) { return; }
+            long parsedNext;
+            try { parsedNext = Long.parseLong(nextMs); } catch (Exception e) { parsedNext = 0L; }
+            final long next = parsedNext;
             runOnUiThread(new Runnable() {
                 @Override public void run() {
                     if (TimerService.isRunning()) {
-                        TimerService.updateRunning(end, label);
+                        TimerService.updateRunning(end, label, nextLabel, next, auto);
                     } else {
                         Intent i = new Intent(MainActivity.this, TimerService.class);
                         i.setAction(TimerService.ACTION_START);
                         i.putExtra(TimerService.EXTRA_END, end);
                         i.putExtra(TimerService.EXTRA_LABEL, label);
+                        i.putExtra(TimerService.EXTRA_NEXT_LABEL, nextLabel);
+                        i.putExtra(TimerService.EXTRA_NEXT_MS, next);
+                        i.putExtra(TimerService.EXTRA_AUTO, auto);
                         ContextCompat.startForegroundService(MainActivity.this, i);
                     }
                 }
+            });
+        }
+
+        /** Freeze the notification instead of tearing the service down. */
+        @JavascriptInterface
+        public void pauseTimer(final String remainingMs, final String label) {
+            long parsed;
+            try { parsed = Long.parseLong(remainingMs); } catch (Exception e) { parsed = 0L; }
+            final long remaining = parsed;
+            runOnUiThread(new Runnable() {
+                @Override public void run() { TimerService.pause(remaining, label); }
             });
         }
 

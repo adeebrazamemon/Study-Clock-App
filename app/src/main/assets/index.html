@@ -626,7 +626,7 @@ function toggle(){
 function resetBlock(){
   running = false;
   remaining = modeSeconds(mode);
-  save(true); nativeSync(); renderClock();
+  save(true); nativeStop(); renderClock();
 }
 function endBlock(){
   if(mode === "focus" && !running && remaining >= modeSeconds(mode)) return;
@@ -688,23 +688,52 @@ function chime(){
 
 /* ---------- Android bridge (inert on the web) ---------- */
 var NATIVE = (typeof window.AndroidTimer !== "undefined");
-function modeLabel(){
-  if(mode === "focus"){
+/* Whether the service currently has a notification up. Without this the page
+   would post a paused notification on first load, before anything has run. */
+var nativeLive = false;
+
+function labelFor(m){
+  if(m === "focus"){
     var t = state.activeTask ? taskName(state.activeTask) : null;
     return "Focus \u00b7 " + (t || catName(state.activeCat));
   }
-  return mode === "shortBreak" ? "Short break" : "Long break";
+  return m === "shortBreak" ? "Short break" : "Long break";
 }
+function modeLabel(){ return labelFor(mode); }
+
+/* One block of lookahead for the service, using the same rule blockFinished
+   uses, so both sides land on the same next block. */
+function nextBlock(){
+  var m;
+  if(mode === "focus"){
+    var done = state.completed + 1;
+    m = (done % state.settings.cycles === 0) ? "longBreak" : "shortBreak";
+  }else{
+    m = "focus";
+  }
+  return { label: labelFor(m), ms: modeSeconds(m)*1000 };
+}
+
 function nativeSync(){
   if(!NATIVE) return;
   try{
     if(running){
       var end = Date.now() + Math.max(0, remaining)*1000;
-      window.AndroidTimer.startTimer(String(Math.round(end)), modeLabel());
-    }else{
-      window.AndroidTimer.stopTimer();
+      var nb = nextBlock();
+      window.AndroidTimer.startTimer(
+        String(Math.round(end)), modeLabel(),
+        nb.label, String(Math.round(nb.ms)), !!state.settings.auto);
+      nativeLive = true;
+    }else if(nativeLive){
+      /* Paused, or a block queued but not started. Keep the notification. */
+      window.AndroidTimer.pauseTimer(
+        String(Math.round(Math.max(0, remaining)*1000)), modeLabel());
     }
   }catch(e){}
+}
+function nativeStop(){
+  if(!NATIVE) return;
+  try{ window.AndroidTimer.stopTimer(); nativeLive = false; }catch(e){}
 }
 function nativeDone(finishedMode){
   if(!NATIVE) return;
@@ -1345,7 +1374,7 @@ document.getElementById("filein").addEventListener("change", function(ev){
       state.activeTask = d.activeTask || null;
       state.completed = d.completed || 0;
       state.activeCat = d.activeCat || state.categories[0].id;
-      running = false; setMode("focus", false);
+      running = false; setMode("focus", false); nativeStop();
       save(true); renderAll(); note("Backup restored.");
     }catch(e){ note("That file is not a Study Clock backup."); }
   };
@@ -1403,7 +1432,7 @@ window.__nativeCmd = function(cmd){
   else if(cmd === "stop"){
     running = false;
     remaining = modeSeconds(mode);
-    save(true); nativeSync(); renderClock();
+    save(true); nativeStop(); renderClock();
   }
   else if(cmd === "exitfs"){ if(fsOn) setFullscreen(false); }
   return true;

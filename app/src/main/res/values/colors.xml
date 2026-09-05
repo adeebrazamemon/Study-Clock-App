@@ -2,7 +2,4 @@
 <resources>
     <color name="ink">#FF1F6F5C</color>
     <color name="paper">#FFE9EDEC</color>
-    <!-- Now Bar / live notification chip. Focus reuses the app green. -->
-    <color name="nowbar_focus">#FF1F6F5C</color>
-    <color name="nowbar_break">#FF2F6F9A</color>
 </resources>

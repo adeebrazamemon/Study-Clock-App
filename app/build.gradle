@@ -10,23 +10,8 @@ android {
         applicationId "app.studyclock"
         minSdk 24
         targetSdk 35
-        versionCode 4
-        versionName "1.3"
-    }
-
-    /* nowbar ships under a package name that is on Samsung's Now Bar whitelist.
-       Same code, different applicationId. Installs alongside the normal build
-       and does NOT share its data, so export a backup before switching. */
-    flavorDimensions = ["distribution"]
-
-    productFlavors {
-        normal {
-            dimension "distribution"
-        }
-        nowbar {
-            dimension "distribution"
-            applicationId "com.locnall.KimGiSa"
-        }
+        versionCode 5
+        versionName "1.4"
     }
 
     buildTypes {
