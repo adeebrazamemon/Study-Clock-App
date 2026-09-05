@@ -27,9 +27,11 @@ public class TimerService extends Service {
     public static final String ACTION_SKIP = "app.studyclock.SKIP";
     public static final String ACTION_STOP = "app.studyclock.STOP";
 
-    /* Set with the raw key rather than the API-36 setter, so this compiles on any SDK.
-       Devices that do not know it ignore it and show a normal ongoing notification. */
+    /* Set with the raw keys rather than the API-36 setters, so this compiles on any SDK.
+       Devices that do not know them ignore them and show a normal ongoing notification. */
     private static final String EXTRA_PROMOTED = "android.requestPromotedOngoing";
+    /* The few characters shown in the collapsed status bar chip. */
+    private static final String EXTRA_SHORT_CRITICAL = "android.shortCriticalText";
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
 
@@ -130,11 +132,54 @@ public class TimerService extends Service {
         b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
         b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
 
-        Bundle promote = new Bundle();
-        promote.putBoolean(EXTRA_PROMOTED, true);
-        b.addExtras(promote);
+        long remaining = endTime - System.currentTimeMillis();
+        boolean counting = !paused && remaining > 0;
 
-        return b.build();
+        Bundle extras = new Bundle();
+
+        // Android 16 Live Updates. Public API, no spoofing, but on One UI it
+        // depends on Developer options > "Live notifications for all apps".
+        extras.putBoolean(EXTRA_PROMOTED, true);
+        extras.putString(EXTRA_SHORT_CRITICAL,
+                counting ? NowBar.shortText(remaining) : "Paused");
+
+        // Samsung's own Live Notifications keys. Ignored unless the package name
+        // is whitelisted, which is what the nowbar build flavour is for.
+        extras.putAll(NowBar.extras(
+                this,
+                nowBarPrimary(),
+                nowBarSecondary(),
+                getColor(isFocus() ? R.color.nowbar_focus : R.color.nowbar_break),
+                R.drawable.ic_stat_timer,
+                counting ? remaining : 0L,
+                true));
+
+        b.addExtras(extras);
+
+        Notification n = b.build();
+        NowBar.logEligibility(this, n);
+        return n;
+    }
+
+    /** The page sends "Focus &#183; <task or category>", "Short break" or "Long break". */
+    private boolean isFocus() {
+        return label != null && label.startsWith("Focus");
+    }
+
+    /** Headline for the lock screen card: the task or category when there is one. */
+    private String nowBarPrimary() {
+        if (label == null) return "Study Clock";
+        int dot = label.indexOf('\u00b7');
+        return dot > 0 ? label.substring(dot + 1).trim() : label;
+    }
+
+    /** Second line: what kind of block it is, or Paused. */
+    private String nowBarSecondary() {
+        if (paused) return "Paused";
+        if (label == null) return null;
+        int dot = label.indexOf('\u00b7');
+        // A break label already says everything, so no second line for it.
+        return dot > 0 ? label.substring(0, dot).trim() : null;
     }
 
     private PendingIntent servicePi(String action, int req) {
