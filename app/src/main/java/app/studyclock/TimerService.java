@@ -17,8 +17,7 @@ import androidx.core.app.NotificationManagerCompat;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
 
 /**
  * Owns the running block rather than only drawing it.
@@ -41,7 +40,7 @@ public class TimerService extends Service {
     public static final String ACTION_BLOCK_END = "app.studyclock.BLOCK_END";
     /** Refreshes the notification (mainly the progress bar) every PROGRESS_TICK_MS. */
     private static final String ACTION_TICK = "app.studyclock.TICK";
-    private static final long PROGRESS_TICK_MS = 5_000L;
+    private static final long PROGRESS_TICK_MS = 2_000L;
 
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
@@ -328,31 +327,30 @@ public class TimerService extends Service {
         }
 
         if (totalMs > 0) {
-            // A segment is drawn fully in its own color for its own length,
-            // full stop -- it is not a fill level, and setProgress() only
-            // positions a tracker icon we never set. One segment spanning
-            // the whole bar is why this used to render as permanently 100%.
-            // Two segments -- remaining, then already-elapsed -- and
-            // shrinking/growing their lengths over time is what actually
-            // animates the bar.
+            // setStyledByProgress(false) -- what the previous two attempts
+            // both had -- explicitly tells the OS *not* to visually
+            // distinguish behind-progress from ahead-of-progress at all, so
+            // setProgress() had no visual effect and a single segment just
+            // rendered fully colored for its whole length regardless of
+            // progress (the original "always 100%" bug). The follow-up
+            // "fix" of splitting into two segments and resizing them worked
+            // around that instead of using it, which is almost certainly
+            // also why the two segments' shared edge looked like a seam.
+            // true is what actually makes setProgress() mean something: one
+            // segment, and the OS itself renders filled-vs-unfilled based
+            // on where progress sits along it.
             long remainingNow = paused ? pausedRemaining
                     : Math.max(0L, endTime - System.currentTimeMillis());
             int totalSec = (int) Math.max(1L, totalMs / 1000L);
             int remainingSec = (int) Math.max(0L, Math.min(totalSec, remainingNow / 1000L));
             int elapsedSec = totalSec - remainingSec;
 
-            List<NotificationCompat.ProgressStyle.Segment> segments = new ArrayList<>(2);
-            if (remainingSec > 0) {
-                segments.add(new NotificationCompat.ProgressStyle.Segment(remainingSec)
-                        .setColor(progressColor()));
-            }
-            if (elapsedSec > 0) {
-                segments.add(new NotificationCompat.ProgressStyle.Segment(elapsedSec)
-                        .setColor(getColor(R.color.progress_track)));
-            }
             b.setStyle(new NotificationCompat.ProgressStyle()
-                    .setStyledByProgress(false)
-                    .setProgressSegments(segments));
+                    .setStyledByProgress(true)
+                    .setProgressSegments(Collections.singletonList(
+                            new NotificationCompat.ProgressStyle.Segment(totalSec)
+                                    .setColor(progressColor())))
+                    .setProgress(elapsedSec));
         }
 
         b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));

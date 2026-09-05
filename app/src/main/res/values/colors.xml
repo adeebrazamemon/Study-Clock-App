@@ -5,8 +5,4 @@
     <!-- Live Update progress bar: focus reuses ink, break gets its own color
          so the two are distinguishable at a glance in the notification. -->
     <color name="progress_break">#FF2F6F9A</color>
-    <!-- The already-elapsed segment's track. paper (near-white) read as a
-         stark, disconnected nub against a dark notification shade; a muted
-         gray blends at the seam in both light and dark shades. -->
-    <color name="progress_track">#FF9098A0</color>
 </resources>
