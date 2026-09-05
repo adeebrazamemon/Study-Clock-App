@@ -30,6 +30,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
 
+        // Edge-to-edge for the whole app, not just the in-page "Full screen"
+        // clock mode: without this, hiding the system bars below just leaves
+        // their reserved space blank instead of handing it to the WebView,
+        // so the page never actually gets the room back.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         web = new WebView(this);
         setContentView(web);
 
@@ -50,6 +56,11 @@ public class MainActivity extends AppCompatActivity {
         web.loadUrl("file:///android_asset/index.html");
 
         askForNotificationPermission();
+        // The whole app runs edge-to-edge, not just the in-page "Full
+        // screen" clock mode -- the status bar and nav bar were otherwise
+        // always visible during ordinary use, quietly eating into the
+        // height every layout calculation on the page assumed it had.
+        hideSystemBars();
 
         // Buttons on the ongoing notification call straight into the page.
         TimerService.setCommandListener(new TimerService.CommandListener() {
@@ -96,6 +107,28 @@ public class MainActivity extends AppCompatActivity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
             }
         }
+    }
+
+    /** System bars hidden (swipe from an edge to peek them back temporarily)
+     *  for ordinary use of the whole app -- separate from applyImmersive()
+     *  below, which additionally keeps the screen on and is tied to the
+     *  in-page "Full screen" clock mode specifically (including the back
+     *  button's exitfs handling). This one has no such side effects, so
+     *  it's safe to call any time the bars might have crept back. */
+    private void hideSystemBars() {
+        View decor = getWindow().getDecorView();
+        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), decor);
+        c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        c.hide(WindowInsetsCompat.Type.systemBars());
+    }
+
+    /** Android tends to let the system bars creep back after the window
+     *  loses and regains focus (backgrounding, a permission dialog, the
+     *  keyboard) -- re-hide them whenever focus returns. */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemBars();
     }
 
     /** Hide or restore the status and navigation bars.

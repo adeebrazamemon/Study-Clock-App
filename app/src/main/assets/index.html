@@ -62,7 +62,18 @@
   }
   body.rest{--focus:var(--rest);--focus-soft:var(--rest-soft)}
 
-  .shell{max-width:1040px;margin:0 auto;padding:20px 18px 96px}
+  /* env(safe-area-inset-*) is 0 anywhere it doesn't apply (the web, an
+     older non-edge-to-edge Android build) so this is additive, never a
+     regression -- but now that the Android app draws edge-to-edge, the
+     header would otherwise sit flush against the physical top edge
+     (behind where the status bar used to reserve its own space), and a
+     device's notch/gesture-handle area needs the same clearance on the
+     sides and bottom. */
+  .shell{
+    max-width:1040px;margin:0 auto;
+    padding:calc(20px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right))
+            calc(96px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
+  }
   .page{display:none}
   .page.on{display:block}
 
@@ -381,7 +392,9 @@
          note, extras) needed, and scrolled the whole page once that
          stack was taller than the window -- easy to hit once the face
          itself scales up with a wide, short window. */
-      height:calc(100vh - 170px);min-height:0;
+      /* Plus the same safe-area insets .shell's padding now carries --
+         0 anywhere that doesn't apply, so this is exact either way. */
+      height:calc(100vh - 170px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;
       grid-template-columns:8fr 2fr;
       /* stretch (the default -- no align-items line needed), not start:
          the sidebar matches the clock card's full height instead of
@@ -497,7 +510,9 @@
        time manually) its own natural size. */
     #page-overview.on{
       display:grid;
-      height:calc(100vh - 170px);min-height:0;
+      /* Plus the same safe-area insets .shell's padding now carries --
+         0 anywhere that doesn't apply, so this is exact either way. */
+      height:calc(100vh - 170px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;
       grid-template-columns:220px 1fr;
       grid-template-rows:1fr auto;
       grid-template-areas:"stats cal" "foot   foot";
