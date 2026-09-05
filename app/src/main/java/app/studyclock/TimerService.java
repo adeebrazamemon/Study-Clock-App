@@ -143,15 +143,7 @@ public class TimerService extends Service {
 
         // Samsung's own Live Notifications keys. Ignored unless the package name
         // is whitelisted, which is what the nowbar build flavour is for.
-        extras.putAll(NowBar.extras(
-                this,
-                nowBarPrimary(),
-                nowBarSecondary(),
-                getColor(isFocus() ? R.color.nowbar_focus : R.color.nowbar_break),
-                R.drawable.ic_stat_timer,
-                counting ? remaining : 0L,
-                true));
-
+        
         b.addExtras(extras);
 
         Notification n = b.build();
