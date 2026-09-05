@@ -20,6 +20,13 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- Tells One UI this app posts ongoing notifications that want Live
+             Notification / Now Bar treatment. Honoured only for whitelisted
+             package names; ignored everywhere else. -->
+        <meta-data
+            android:name="com.samsung.android.support.ongoing_activity"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
