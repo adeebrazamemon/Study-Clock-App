@@ -123,22 +123,22 @@
     position:fixed;inset:0;display:flex;flex-direction:column;
     align-items:center;justify-content:center;background:var(--bg);padding:24px;
   }
-  body.fs .face{width:58vmin;height:58vmin}
+  /* Both clock styles share the same viewBox and coordinate system, so
+     there's no technical reason to size them differently -- this matches
+     what was previously only the analog size. */
+  body.fs .face{width:74vmin;height:74vmin}
   /* .inset (digital) sits inside the ring, so it can be sized generously.
-     The analog face alone already fills most of the viewport (74vmin
-     below), so its caption stays small -- roughly .tod's scale -- rather
-     than the big display size a caption gets outside full screen; at that
-     size it was overflowing the viewport and pushing the buttons off. */
+     The analog caption stays small -- roughly .tod's scale -- rather than
+     the big display size a caption gets outside full screen; at that size
+     it was overflowing the viewport and pushing the buttons off. */
   body.fs .digits.inset{font-size:9vmin}
   body.fs .digits:not(.inset){font-size:4.5vmin;margin-top:1.5vh}
   body.fs .tod{font-size:4vmin;margin-top:2vmin}
-  body.fs.analog .face{width:74vmin;height:74vmin}
   @media (orientation:landscape){
     body.fs .clockwrap{padding:2vh 4vw}
-    body.fs .face{width:52vmin;height:52vmin}
+    body.fs .face{width:78vmin;height:78vmin}
     body.fs .digits.inset{font-size:8vmin;margin-top:0}
     body.fs .digits:not(.inset){font-size:3.5vmin;margin-top:1vh}
-    body.fs.analog .face{width:78vmin;height:78vmin}
   }
 
 
