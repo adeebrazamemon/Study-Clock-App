@@ -235,7 +235,6 @@ public class TimerService extends Service {
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CH_ONGOING)
                 .setSmallIcon(R.drawable.ic_stat_timer)
                 .setContentTitle(label)
-                .setContentText("Tap to open Study Clock")
                 .setContentIntent(pi)
                 .setOngoing(true)
                 .setSilent(true)
@@ -271,7 +270,7 @@ public class TimerService extends Service {
                     .setStyledByProgress(false)
                     .setProgressSegments(Collections.singletonList(
                             new NotificationCompat.ProgressStyle.Segment(totalSec)
-                                    .setColor(getColor(R.color.ink))))
+                                    .setColor(progressColor())))
                     .setProgress(elapsedSec));
         }
 
@@ -280,6 +279,13 @@ public class TimerService extends Service {
         b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
 
         return b.build();
+    }
+
+    /* label is always exactly "Focus", "Short break", or "Long break" (see
+       labelFor() in index.html), so this string check is safe rather than
+       fragile. Both break lengths share one color; only focus differs. */
+    private int progressColor() {
+        return getColor("Focus".equals(label) ? R.color.ink : R.color.progress_break);
     }
 
     static String mmss(long ms) {

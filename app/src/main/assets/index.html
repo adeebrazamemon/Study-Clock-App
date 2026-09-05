@@ -693,11 +693,10 @@ var NATIVE = (typeof window.AndroidTimer !== "undefined");
    would post a paused notification on first load, before anything has run. */
 var nativeLive = false;
 
+/* Just the mode name for the notification title. The category/task still
+   shows on the page itself; the notification stays uncluttered. */
 function labelFor(m){
-  if(m === "focus"){
-    var t = state.activeTask ? taskName(state.activeTask) : null;
-    return "Focus \u00b7 " + (t || catName(state.activeCat));
-  }
+  if(m === "focus") return "Focus";
   return m === "shortBreak" ? "Short break" : "Long break";
 }
 function modeLabel(){ return labelFor(mode); }
