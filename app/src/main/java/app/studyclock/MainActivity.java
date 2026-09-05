@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -40,6 +41,11 @@ public class MainActivity extends AppCompatActivity {
         s.setSupportZoom(false);
 
         web.setWebViewClient(new WebViewClient());
+        // Without this, WebView silently no-ops window.confirm/alert/prompt --
+        // no dialog, no error, confirm() just returns false immediately. That
+        // made deleting a task with logged time (which asks for confirmation)
+        // look like the button did nothing at all.
+        web.setWebChromeClient(new WebChromeClient());
         web.addJavascriptInterface(new Bridge(), "AndroidTimer");
         web.loadUrl("file:///android_asset/index.html");
 
