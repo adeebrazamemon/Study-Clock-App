@@ -140,8 +140,6 @@ public class TimerService extends Service {
         // Android 16 Live Updates. Public API, no spoofing, but on One UI it
         // depends on Developer options > "Live notifications for all apps".
         extras.putBoolean(EXTRA_PROMOTED, true);
-        extras.putString(EXTRA_SHORT_CRITICAL,
-                counting ? NowBar.shortText(remaining) : "Paused");
 
         // Samsung's own Live Notifications keys. Ignored unless the package name
         // is whitelisted, which is what the nowbar build flavour is for.
