@@ -172,7 +172,15 @@
   body.fs .card{border:none;background:none;padding:0}
   body.fs .clockwrap{
     position:fixed;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;background:var(--bg);padding:24px;
+    align-items:center;justify-content:center;background:var(--bg);
+    /* env(safe-area-inset-*) (0 anywhere it doesn't apply) keeps Start/
+       Reset/Exit full screen clear of a device's bottom gesture-swipe
+       strip -- full screen is now genuinely edge-to-edge on Android
+       (see MainActivity's setDecorFitsSystemWindows), so that strip is
+       real, usable-looking space the buttons could sit inside of and
+       get visually cut off or hard to tap. */
+    padding:calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
+            calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
   }
   /* Both clock styles share the same viewBox and coordinate system, so
      there's no technical reason to size them differently -- this matches
@@ -194,7 +202,10 @@
   body.fs .timeleft-slot{min-height:4.5vmin!important;margin-top:1.5vh}
   body.fs .tod{font-size:4vmin;margin-top:2vmin}
   @media (orientation:landscape){
-    body.fs .clockwrap{padding:2vh 4vw}
+    body.fs .clockwrap{
+      padding:calc(2vh + env(safe-area-inset-top)) calc(4vw + env(safe-area-inset-right))
+              calc(2vh + env(safe-area-inset-bottom)) calc(4vw + env(safe-area-inset-left));
+    }
     body.fs .face{width:80vmin!important;height:80vmin!important}
     body.fs .digits.inset{font-size:8vmin!important;margin-top:0}
     body.fs .digits:not(.inset){font-size:3.5vmin!important}
@@ -725,6 +736,10 @@
   <div class="dpane" id="pane-sync">
     <div id="sync-box"></div>
   </div>
+
+  <!-- A quick, no-guessing way to confirm a sideloaded APK actually
+       updated -- bump this alongside build.gradle's versionName. -->
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.6</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>

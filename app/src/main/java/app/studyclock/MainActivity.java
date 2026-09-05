@@ -3,6 +3,7 @@ package app.studyclock;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -129,6 +130,19 @@ public class MainActivity extends AppCompatActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) hideSystemBars();
+    }
+
+    /** The manifest lists orientation/screenSize/etc. under
+     *  android:configChanges, which means Android hands changes like a
+     *  rotation to this method instead of destroying and recreating the
+     *  Activity -- onCreate() (and its one-time hideSystemBars() call)
+     *  never runs again. Some devices re-show the system bars on exactly
+     *  that kind of change, so without this they'd stay shown from the
+     *  first rotation onward for the rest of the session. */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        hideSystemBars();
     }
 
     /** Hide or restore the status and navigation bars.
