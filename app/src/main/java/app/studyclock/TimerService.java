@@ -14,6 +14,9 @@ import android.os.IBinder;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.Collections;
 
 /**
@@ -35,6 +38,9 @@ public class TimerService extends Service {
     public static final String ACTION_SKIP = "app.studyclock.SKIP";
     public static final String ACTION_STOP = "app.studyclock.STOP";
     public static final String ACTION_BLOCK_END = "app.studyclock.BLOCK_END";
+    /** Refreshes the notification (mainly the progress bar) every PROGRESS_TICK_MS. */
+    private static final String ACTION_TICK = "app.studyclock.TICK";
+    private static final long PROGRESS_TICK_MS = 60_000L;
 
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
@@ -143,19 +149,35 @@ public class TimerService extends Service {
             if (listener != null) listener.onCommand("toggle");
 
         } else if (ACTION_SKIP.equals(action)) {
+            // Act locally first (see ACTION_TOGGLE above): pressing Skip on the
+            // notification used to depend entirely on the page being reachable
+            // to call endBlock(), which silently did nothing if the WebView
+            // wasn't around to run it. Advancing here means Skip always moves
+            // the notification on; if the page *is* reachable it still gets
+            // the callback below and its own, more complete recompute (task
+            // and category time, state.completed, ...) naturally supersedes
+            // this simpler guess when it calls startTimer/updateRunning.
+            cancelEnd();
+            advanceQueued();
             if (listener != null) listener.onCommand("skip");
 
         } else if (ACTION_BLOCK_END.equals(action)) {
             onBlockEnd();
 
+        } else if (ACTION_TICK.equals(action)) {
+            // Nothing to do here beyond falling through to the repost below;
+            // this action exists only to wake up and refresh the progress bar.
+
         } else if (ACTION_STOP.equals(action)) {
             if (listener != null) listener.onCommand("stop");
             cancelEnd();
+            cancelTick();
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
 
+        if (paused) cancelTick(); else scheduleTick();
         startForeground(ID_ONGOING, build());
         // Restart if Android kills us under memory pressure.
         return START_STICKY;
@@ -168,10 +190,18 @@ public class TimerService extends Service {
     private void onBlockEnd() {
         if (paused) return;
         if (System.currentTimeMillis() < endTime) return;
-
         alertFinished(this, label + " done",
                 nextLabel != null ? "Next: " + nextLabel : "Session finished.");
+        advanceQueued();
+    }
 
+    /**
+     * Move on to whatever block was queued next, shared by a natural end
+     * (onBlockEnd) and an explicit Skip. Skip does not also call
+     * alertFinished: it is a deliberate foreground action, so it just updates
+     * the notification quietly rather than also firing a heads-up alert.
+     */
+    private void advanceQueued() {
         if (nextLabel == null || nextMs <= 0L) {
             // Nothing queued, so stop counting rather than run into negative time.
             paused = true;
@@ -199,6 +229,28 @@ public class TimerService extends Service {
         }
     }
 
+    /**
+     * A snapshot the page can adopt when it (re)gains a JS context and might
+     * be stale about what actually happened while it didn't -- e.g. Pause or
+     * Skip pressed on the notification while the app was backgrounded enough
+     * that the WebView never ran the usual callback. Null if nothing is running.
+     */
+    public static String snapshotJson() {
+        TimerService s = instance;
+        if (s == null) return null;
+        try {
+            JSONObject o = new JSONObject();
+            o.put("label", s.label);
+            o.put("paused", s.paused);
+            o.put("endTime", s.endTime);
+            o.put("pausedRemaining", s.pausedRemaining);
+            o.put("totalMs", s.totalMs);
+            return o.toString();
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
     private void scheduleEnd() {
         AlarmManager am = getSystemService(AlarmManager.class);
         if (am == null) return;
@@ -219,6 +271,20 @@ public class TimerService extends Service {
     private void cancelEnd() {
         AlarmManager am = getSystemService(AlarmManager.class);
         if (am != null) am.cancel(servicePi(ACTION_BLOCK_END, 13));
+    }
+
+    /** Purely cosmetic, so a plain inexact alarm is fine -- being off by a
+        minute under Doze doesn't matter for a progress bar. */
+    private void scheduleTick() {
+        AlarmManager am = getSystemService(AlarmManager.class);
+        if (am == null) return;
+        am.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + PROGRESS_TICK_MS,
+                servicePi(ACTION_TICK, 14));
+    }
+
+    private void cancelTick() {
+        AlarmManager am = getSystemService(AlarmManager.class);
+        if (am != null) am.cancel(servicePi(ACTION_TICK, 14));
     }
 
     private void post() {
@@ -348,6 +414,7 @@ public class TimerService extends Service {
     @Override
     public void onDestroy() {
         cancelEnd();
+        cancelTick();
         instance = null;
         listener = null;
         super.onDestroy();

@@ -76,7 +76,11 @@
   .face{position:relative;width:250px;height:250px;margin:0 auto}
   .face svg{display:block;width:100%;height:100%}
   .ring-track{fill:none;stroke:var(--line);stroke-width:6}
-  .ring-arc{fill:none;stroke:var(--focus);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .3s linear}
+  /* Matches the 250ms tick interval exactly. A longer transition here
+     restarts before the previous one finishes on every tick, which is
+     what caused the visible stutter (worse on a short test block, where
+     each step is a bigger jump). */
+  .ring-arc{fill:none;stroke:var(--focus);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .25s linear}
   .tickmark{stroke:var(--line);stroke-width:2}
   .tickmark.major{stroke:var(--muted);stroke-width:3}
   .hand{stroke:var(--focus);stroke-width:4;stroke-linecap:round}
@@ -85,8 +89,10 @@
     font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-.02em;line-height:1;
     font-size:52px;margin-top:4px;
   }
-  .face .inset{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-  .face .inset .digits{font-size:34px;margin:0}
+  /* Digital style centers the countdown inside the ring; analog keeps it as
+     a caption below the clock (see buildFace(), which moves this same
+     element between the two spots rather than duplicating it). */
+  .digits.inset{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0}
   .tod{color:var(--muted);font-size:14px;margin-top:9px;font-variant-numeric:tabular-nums}
   .todayline{color:var(--muted);font-size:13.5px;margin-top:3px}
   .controls{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
@@ -114,13 +120,13 @@
     align-items:center;justify-content:center;background:var(--bg);padding:24px;
   }
   body.fs .face{width:58vmin;height:58vmin}
-  body.fs .digits{font-size:15vmin}
+  /* Full screen is a clean hands/ring-only view -- renderClock() always
+     hides .digits here regardless of the "Show time left" setting. */
   body.fs .tod{font-size:4vmin;margin-top:2vmin}
   body.fs.analog .face{width:74vmin;height:74vmin}
   @media (orientation:landscape){
     body.fs .clockwrap{padding:2vh 4vw}
     body.fs .face{width:52vmin;height:52vmin}
-    body.fs .digits{font-size:13vmin;margin-top:1vh}
     body.fs.analog .face{width:78vmin;height:78vmin}
   }
 
@@ -129,7 +135,6 @@
   .digits.d-mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:0}
   .digits.d-thin{font-weight:200;letter-spacing:.01em}
   .digits.d-outline{color:transparent;-webkit-text-stroke:2px var(--focus);paint-order:stroke}
-  body.fs .digits.d-outline{-webkit-text-stroke-width:3px}
 
   body.fs .controls{margin-top:26px;opacity:.25;transition:opacity .25s}
   body.fs .clockwrap:hover .controls,body.fs .controls:focus-within{opacity:1}
@@ -445,12 +450,10 @@
       </select>
     </div>
     <div class="field"><label for="in-tod">Show the current time</label><input type="checkbox" id="in-tod"></div>
+    <div class="field"><label for="in-timeleft">Show time left</label><input type="checkbox" id="in-timeleft"></div>
   </div>
 
   <div class="dpane" id="pane-sync">
-    <p class="hint">Sign in to sync your tasks, categories, and stats across
-      every device you use. Nothing here leaves your device unless you
-      sign in — the running timer itself always stays local to each device.</p>
     <div id="sync-box"></div>
   </div>
 
@@ -507,7 +510,7 @@ var PALETTE = ["#1F6F5C","#43648F","#9C4B2A","#6B5B95","#3F7A8C","#8A6D1F","#7A3
 var state = {
   settings:{focus:25,shortBreak:5,longBreak:15,cycles:4,goal:4,auto:true,sound:true,
             style:"digital", theme:"auto",
-            analogStyle:"ticks", digitStyle:"plain", showTod:true},
+            analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true},
   categories:[
     {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
     {id:"c2",name:"Research",color:PALETTE[1],archived:false},
@@ -660,16 +663,12 @@ function renderSyncUI(){
   }
   if(syncUser){
     var name = syncUser.displayName || syncUser.email || "your account";
-    box.innerHTML =
-      '<p>Signed in as <strong></strong>. Synced.</p>' +
-      '<button id="sync-out">Sign out</button>';
+    box.innerHTML = '<p>Signed in as <strong></strong></p><button id="sync-out">Sign out</button>';
     box.querySelector("strong").textContent = name;
     document.getElementById("sync-out").addEventListener("click", signOutSync);
   }else{
     box.innerHTML = '<button class="primary" id="sync-in">Sign in with Google</button>' +
-      (NATIVE ? '<p class="hint">Google blocks its sign-in inside an embedded ' +
-        'app view like this one, so this won’t work here yet — use the web ' +
-        'version to sync for now.</p>' : '');
+      (NATIVE ? '<p class="hint">Not available in the app yet — use the web version.</p>' : '');
     document.getElementById("sync-in").addEventListener("click", signIn);
   }
 }
@@ -909,6 +908,12 @@ var faceBuilt = null;   // which style is currently in the DOM
 
 function buildFace(style){
   var face = document.getElementById("face");
+  var digits = document.getElementById("digits");
+  // Move digits out to a sibling of #face first: face.innerHTML = ... below
+  // would otherwise discard it if a previous digital build had it living
+  // inside the face. Actual visibility is renderClock()'s job, not this one.
+  document.getElementById("clockwrap").insertBefore(digits, face.nextSibling);
+
   var svg = '<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">';
   if(style === "analog"){
     var as = state.settings.analogStyle || "ticks";
@@ -929,18 +934,17 @@ function buildFace(style){
     svg += '<circle class="hub" cx="110" cy="110" r="5"/>';
     svg += '</svg>';
     face.innerHTML = svg;
-    document.getElementById("digits").style.display = "none";
   }else{
     svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
     svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="rotate(-90 110 110)"></circle>';
     svg += '</svg>';
     face.innerHTML = svg;
-    document.getElementById("digits").style.display = "";
+    face.appendChild(digits); // centered inside the ring
   }
   document.getElementById("tod").style.display = (state.settings.showTod === false) ? "none" : "";
   document.body.classList.toggle("analog", style === "analog");
-  var dg = document.getElementById("digits");
-  dg.className = "digits d-" + (state.settings.digitStyle || "plain");
+  digits.className = "digits d-" + (state.settings.digitStyle || "plain") +
+    (style === "analog" ? "" : " inset");
   faceBuilt = style + "|" + (state.settings.analogStyle||"ticks") + "|" + (state.settings.digitStyle||"plain");
   document.getElementById("stylebtn").textContent =
     style === "analog" ? "Digital" : "Analog";
@@ -961,10 +965,10 @@ function renderClock(){
   var secs = Math.max(0, Math.ceil(remaining));
   var label = pad(Math.floor(secs/60))+":"+pad(secs%60);
 
-  var d1 = document.getElementById("digits");
-  var d2 = document.getElementById("facedigits");
-  if(d1) d1.textContent = label;
-  if(d2) d2.textContent = label;
+  var digits = document.getElementById("digits");
+  digits.textContent = label;
+  // Full screen is always hands/ring-only, regardless of the setting.
+  digits.style.display = (fsOn || state.settings.showTimeLeft === false) ? "none" : "";
 
   var total = modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
@@ -1371,6 +1375,7 @@ document.getElementById("open-settings").addEventListener("click", function(){
   document.getElementById("in-sound").checked = state.settings.sound;
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
   document.getElementById("in-tod").checked = state.settings.showTod !== false;
+  document.getElementById("in-timeleft").checked = state.settings.showTimeLeft !== false;
   renderSyncUI();
   dlgSettings.showModal();
 });
@@ -1397,6 +1402,10 @@ Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), functio
 
 document.getElementById("in-tod").addEventListener("change", function(){
   state.settings.showTod = document.getElementById("in-tod").checked;
+  save(true); renderClock();
+});
+document.getElementById("in-timeleft").addEventListener("change", function(){
+  state.settings.showTimeLeft = document.getElementById("in-timeleft").checked;
   save(true); renderClock();
 });
 document.getElementById("set-save").addEventListener("click", function(){
@@ -1525,9 +1534,13 @@ document.getElementById("filein").addEventListener("change", function(ev){
 document.getElementById("startstop").addEventListener("click", toggle);
 document.getElementById("reset").addEventListener("click", resetBlock);
 document.getElementById("endblock").addEventListener("click", endBlock);
-document.getElementById("m-focus").addEventListener("click", function(){ setMode("focus", false); });
-document.getElementById("m-short").addEventListener("click", function(){ setMode("shortBreak", false); });
-document.getElementById("m-long").addEventListener("click", function(){ setMode("longBreak", false); });
+/* A running block only stops by actually being stopped/reset/finished -
+   tapping a different mode tab while something else is running must not
+   silently kill it. Switching mode is only live while nothing is running,
+   or when re-selecting the mode already showing. */
+document.getElementById("m-focus").addEventListener("click", function(){ if(running && mode !== "focus") return; setMode("focus", false); });
+document.getElementById("m-short").addEventListener("click", function(){ if(running && mode !== "shortBreak") return; setMode("shortBreak", false); });
+document.getElementById("m-long").addEventListener("click", function(){ if(running && mode !== "longBreak") return; setMode("longBreak", false); });
 document.getElementById("themebtn").addEventListener("click", cycleTheme);
 document.getElementById("fsbtn").addEventListener("click", function(){ setFullscreen(true); });
 document.getElementById("exitfs").addEventListener("click", function(){ setFullscreen(false); });
@@ -1576,8 +1589,46 @@ window.__nativeCmd = function(cmd){
   else if(cmd === "exitfs"){ if(fsOn) setFullscreen(false); }
   return true;
 };
+/* The system back button asks this before deciding whether to background
+   the app: a return of true means a dialog was closed instead. */
+window.__closeTopDialog = function(){
+  var dlgs = document.querySelectorAll("dialog[open]");
+  if(!dlgs.length) return false;
+  dlgs[dlgs.length-1].close();
+  return true;
+};
+/* Pause/Skip pressed on the notification only reach here (via __nativeCmd)
+   if the WebView happened to be alive to run the callback right then --
+   not guaranteed, since the app can be backgrounded enough that it isn't.
+   The service itself always acts correctly regardless, so on anything that
+   could mean "the page may have missed something", ask it what's actually
+   true and adopt that instead of trusting this page's own possibly-stale
+   mode/running/remaining. Only those three adopt; state.* (stats, tasks,
+   categories) is untouched, so nothing here risks double-counting time. */
+function adoptNativeState(){
+  if(!NATIVE) return;
+  var raw;
+  try{ raw = window.AndroidTimer.getServiceState(); }catch(e){ return; }
+  if(!raw) return;
+  var s;
+  try{ s = JSON.parse(raw); }catch(e){ return; }
+  mode = s.label === "Short break" ? "shortBreak" : s.label === "Long break" ? "longBreak" : "focus";
+  document.body.classList.toggle("rest", mode !== "focus");
+  if(s.paused){
+    running = false;
+    remaining = Math.max(0, s.pausedRemaining/1000);
+  }else{
+    running = true;
+    remaining = Math.max(0, (s.endTime - Date.now())/1000);
+  }
+  lastTick = Date.now();
+  nativeLive = true;
+  renderClock(); renderModeButtons();
+}
 window.addEventListener("beforeunload", function(){ save(true); });
-document.addEventListener("visibilitychange", function(){ if(document.hidden) save(true); });
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden) save(true); else adoptNativeState();
+});
 
 /* ---------- wake lock ---------- */
 var wakeLock = null;
@@ -1602,6 +1653,7 @@ var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
 remaining = modeSeconds("focus");
 lastTick = Date.now();
+adoptNativeState(); // overrides the defaults above if a block is already running
 applyTheme();
 renderAll();
 showPage("clock");

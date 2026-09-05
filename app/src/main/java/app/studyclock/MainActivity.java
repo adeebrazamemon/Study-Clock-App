@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -54,9 +55,18 @@ public class MainActivity extends AppCompatActivity {
                 if (immersive) {
                     // Leave full screen rather than the app.
                     callWeb("exitfs");
-                } else {
-                    moveTaskToBack(true);
+                    return;
                 }
+                // A <dialog> (Settings, Categories, ...) is a page-side concept the
+                // system back button knows nothing about. Ask the page to close
+                // whichever one is open; only background the app if there wasn't one.
+                web.evaluateJavascript(
+                        "window.__closeTopDialog ? window.__closeTopDialog() : false",
+                        new ValueCallback<String>() {
+                            @Override public void onReceiveValue(String value) {
+                                if (!"true".equals(value)) moveTaskToBack(true);
+                            }
+                        });
             }
         });
     }
@@ -179,6 +189,14 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public boolean isNative() {
             return true;
+        }
+
+        /** So the page can adopt the truth when it wakes up possibly stale
+            about a Pause/Skip pressed on the notification while it wasn't
+            around to hear about it. Null (as a string) if nothing is running. */
+        @JavascriptInterface
+        public String getServiceState() {
+            return TimerService.snapshotJson();
         }
     }
 }
