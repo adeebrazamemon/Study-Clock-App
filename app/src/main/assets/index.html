@@ -626,6 +626,7 @@ function toggle(){
 function resetBlock(){
   running = false;
   remaining = modeSeconds(mode);
+  state.completed = 0;
   save(true); nativeStop(); renderClock();
 }
 function endBlock(){
@@ -720,9 +721,13 @@ function nativeSync(){
     if(running){
       var end = Date.now() + Math.max(0, remaining)*1000;
       var nb = nextBlock();
+      /* Total length of the block in progress, so the notification's progress
+         bar can show elapsed/total instead of just a countdown. */
+      var total = modeSeconds(mode)*1000;
       window.AndroidTimer.startTimer(
         String(Math.round(end)), modeLabel(),
-        nb.label, String(Math.round(nb.ms)), !!state.settings.auto);
+        nb.label, String(Math.round(nb.ms)), !!state.settings.auto,
+        String(Math.round(total)));
       nativeLive = true;
     }else if(nativeLive){
       /* Paused, or a block queued but not started. Keep the notification. */

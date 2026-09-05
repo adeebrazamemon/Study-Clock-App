@@ -9,11 +9,12 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.IBinder;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+
+import java.util.Collections;
 
 /**
  * Owns the running block rather than only drawing it.
@@ -35,15 +36,12 @@ public class TimerService extends Service {
     public static final String ACTION_STOP = "app.studyclock.STOP";
     public static final String ACTION_BLOCK_END = "app.studyclock.BLOCK_END";
 
-    /* Raw key rather than the API-36 setter, so this compiles on any SDK.
-       Devices that do not know it ignore it and show a normal ongoing notification. */
-    private static final String EXTRA_PROMOTED = "android.requestPromotedOngoing";
-
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
     public static final String EXTRA_NEXT_LABEL = "nextLabel";
     public static final String EXTRA_NEXT_MS = "nextMs";
     public static final String EXTRA_AUTO = "auto";
+    public static final String EXTRA_TOTAL_MS = "totalMs";
 
     private static final String CH_ONGOING = "timer";
     private static final String CH_ALERT = "blockdone";
@@ -72,13 +70,16 @@ public class TimerService extends Service {
     private long nextMs = 0L;
     private boolean auto = false;
 
+    /** Full length of the block in progress, for the notification's progress bar. */
+    private long totalMs = 0L;
+
     public static boolean isRunning() {
         return instance != null;
     }
 
     /** Update an already-running service, safe from the background. */
     public static void updateRunning(long end, String label,
-                                     String nextLabel, long nextMs, boolean auto) {
+                                     String nextLabel, long nextMs, boolean auto, long totalMs) {
         TimerService s = instance;
         if (s == null) return;
         s.endTime = end;
@@ -86,6 +87,7 @@ public class TimerService extends Service {
         s.nextLabel = nextLabel;
         s.nextMs = nextMs;
         s.auto = auto;
+        s.totalMs = totalMs;
         s.paused = false;
         s.pausedRemaining = 0L;
         s.scheduleEnd();
@@ -121,6 +123,7 @@ public class TimerService extends Service {
             nextLabel = intent.getStringExtra(EXTRA_NEXT_LABEL);
             nextMs = intent.getLongExtra(EXTRA_NEXT_MS, 0L);
             auto = intent.getBooleanExtra(EXTRA_AUTO, false);
+            totalMs = intent.getLongExtra(EXTRA_TOTAL_MS, 0L);
             paused = false;
             pausedRemaining = 0L;
             scheduleEnd();
@@ -182,6 +185,9 @@ public class TimerService extends Service {
         nextLabel = null;
         nextMs = 0L;
         label = queuedLabel;
+        // queuedMs is the queued block's full length (focus/short/long break all
+        // differ), so it doubles as the new totalMs for the progress bar.
+        totalMs = queuedMs;
 
         if (auto) {
             endTime = System.currentTimeMillis() + queuedMs;
@@ -236,7 +242,11 @@ public class TimerService extends Service {
                 .setShowWhen(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
-                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                // Asks for the API 36 Live Update / expanded card treatment.
+                // The compat class no-ops on older Android versions, which just
+                // show a normal ongoing notification.
+                .setRequestPromotedOngoing(true);
 
         // Android draws and ticks the countdown; nothing here runs per second.
         if (!paused && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -251,13 +261,23 @@ public class TimerService extends Service {
                     : "Block finished");
         }
 
+        if (totalMs > 0) {
+            long remainingNow = paused ? pausedRemaining
+                    : Math.max(0L, endTime - System.currentTimeMillis());
+            int totalSec = (int) Math.max(1L, totalMs / 1000L);
+            int elapsedSec = (int) Math.min(totalSec,
+                    Math.max(0L, (totalMs - remainingNow) / 1000L));
+            b.setStyle(new NotificationCompat.ProgressStyle()
+                    .setStyledByProgress(false)
+                    .setProgressSegments(Collections.singletonList(
+                            new NotificationCompat.ProgressStyle.Segment(totalSec)
+                                    .setColor(getColor(R.color.ink))))
+                    .setProgress(elapsedSec));
+        }
+
         b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
         b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
         b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
-
-        Bundle promote = new Bundle();
-        promote.putBoolean(EXTRA_PROMOTED, true);
-        b.addExtras(promote);
 
         return b.build();
     }

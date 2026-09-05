@@ -1,3 +1,4 @@
 plugins {
-    id 'com.android.application' version '8.7.3' apply false
+    // 8.10.0 is the earliest AGP that supports compileSdk 36.
+    id 'com.android.application' version '8.10.0' apply false
 }

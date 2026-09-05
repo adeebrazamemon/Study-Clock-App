@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'app.studyclock'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "app.studyclock"
         minSdk 24
         targetSdk 35
-        versionCode 5
-        versionName "1.4"
+        versionCode 6
+        versionName "1.5"
     }
 
     buildTypes {
@@ -32,6 +32,8 @@ dependencies {
     // that arrive transitively, and the duplicate classes fail the build.
     implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.24')
 
-    implementation 'androidx.core:core:1.13.1'
+    // 1.17.0+ is required for NotificationCompat.ProgressStyle and
+    // setRequestPromotedOngoing(), used for the API 36 Live Update card.
+    implementation 'androidx.core:core:1.19.0'
     implementation 'androidx.appcompat:appcompat:1.7.0'
 }

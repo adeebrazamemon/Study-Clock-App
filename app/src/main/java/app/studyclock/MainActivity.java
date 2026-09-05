@@ -104,21 +104,26 @@ public class MainActivity extends AppCompatActivity {
 
         /**
          * nextLabel and nextMs are one block of lookahead, so the service can roll
-         * over on its own when the page is throttled in the background.
+         * over on its own when the page is throttled in the background. totalMs is
+         * the current block's full length, so the notification's progress bar can
+         * show elapsed/total rather than just a countdown.
          */
         @JavascriptInterface
         public void startTimer(final String endTime, final String label,
                                final String nextLabel, final String nextMs,
-                               final boolean auto) {
+                               final boolean auto, final String totalMs) {
             final long end;
             try { end = Long.parseLong(endTime); } catch (Exception e) { return; }
             long parsedNext;
             try { parsedNext = Long.parseLong(nextMs); } catch (Exception e) { parsedNext = 0L; }
             final long next = parsedNext;
+            long parsedTotal;
+            try { parsedTotal = Long.parseLong(totalMs); } catch (Exception e) { parsedTotal = 0L; }
+            final long total = parsedTotal;
             runOnUiThread(new Runnable() {
                 @Override public void run() {
                     if (TimerService.isRunning()) {
-                        TimerService.updateRunning(end, label, nextLabel, next, auto);
+                        TimerService.updateRunning(end, label, nextLabel, next, auto, total);
                     } else {
                         Intent i = new Intent(MainActivity.this, TimerService.class);
                         i.setAction(TimerService.ACTION_START);
@@ -127,6 +132,7 @@ public class MainActivity extends AppCompatActivity {
                         i.putExtra(TimerService.EXTRA_NEXT_LABEL, nextLabel);
                         i.putExtra(TimerService.EXTRA_NEXT_MS, next);
                         i.putExtra(TimerService.EXTRA_AUTO, auto);
+                        i.putExtra(TimerService.EXTRA_TOTAL_MS, total);
                         ContextCompat.startForegroundService(MainActivity.this, i);
                     }
                 }
