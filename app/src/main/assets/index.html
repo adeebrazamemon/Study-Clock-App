@@ -427,15 +427,20 @@
     #page-clock.on .digits.inset{font-size:clamp(34px,3.2vw,56px)}
     #page-clock.on .digits:not(.inset){font-size:clamp(18px,1.6vw,26px)}
     #page-clock.on .timeleft-slot{min-height:clamp(27px,2.4vw,40px)}
-    /* A bit tighter than the phone spacing -- reclaims just enough that
-       the whole stack (mode buttons through the Full screen/Analog
-       row) fits a normal laptop's actual usable height without needing
-       the clock card's own scrollbar at all. */
-    #page-clock.on .mode-row{margin-bottom:14px}
-    #page-clock.on .controls{margin-top:14px}
-    #page-clock.on .goalwrap{margin-top:12px}
-    #page-clock.on .cyclenote{margin-top:10px}
-    #page-clock.on .clockextras{margin-top:10px}
+    /* Fixed pixel margins here (an earlier version of this fix) were
+       tuned against one specific desktop test size and still overflowed
+       on other screens -- a tablet's own font/UI metrics differ just
+       enough that "a bit tighter" in one browser wasn't tight enough in
+       another, forcing the clock card's scrollbar fallback to kick in
+       even though there was visibly room to spare. justify-content:
+       space-between can't make that mistake: it measures the *actual*
+       rendered height of every group below and turns whatever's left
+       over into the gaps between them, on any device, every time --
+       the clock card needing its own scrollbar should now be rare
+       enough that it's only ever a genuinely very short window. */
+    #page-clock.on .clockwrap{height:100%;display:flex;flex-direction:column;justify-content:space-between}
+    #page-clock.on .mode-row,#page-clock.on .clockdisplay,#page-clock.on .controls,
+    #page-clock.on .goalwrap,#page-clock.on .cyclenote,#page-clock.on .clockextras{margin:0}
 
 
     #calcard{
@@ -575,14 +580,20 @@
           <button id="m-long" aria-pressed="false">Long break</button>
         </div>
 
-        <div class="face" id="face"></div>
-        <!-- Fixed-height slot, always present in flow whether or not it
-             currently holds #digits (buildFace() moves #digits inside
-             .face for the digital style) -- keeps everything below it,
-             the goal bar, cycle note, controls, at a constant position
-             regardless of which style is active. -->
-        <div class="timeleft-slot" id="timeleftslot"><div class="digits" id="digits">25:00</div></div>
-        <div class="tod" id="tod">--:--</div>
+        <!-- Grouped so the three stay visually tight together while
+             justify-content:space-between (wide layout only) spreads the
+             *gaps between groups* to fill whatever height is actually
+             available -- see #page-clock.on .clockwrap. -->
+        <div class="clockdisplay">
+          <div class="face" id="face"></div>
+          <!-- Fixed-height slot, always present in flow whether or not it
+               currently holds #digits (buildFace() moves #digits inside
+               .face for the digital style) -- keeps everything below it,
+               the goal bar, cycle note, controls, at a constant position
+               regardless of which style is active. -->
+          <div class="timeleft-slot" id="timeleftslot"><div class="digits" id="digits">25:00</div></div>
+          <div class="tod" id="tod">--:--</div>
+        </div>
 
         <div class="controls">
           <button class="primary" id="startstop">Start</button>
