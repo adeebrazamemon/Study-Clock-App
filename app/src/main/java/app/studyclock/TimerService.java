@@ -343,14 +343,17 @@ public class TimerService extends Service {
                     : Math.max(0L, endTime - System.currentTimeMillis());
             int totalSec = (int) Math.max(1L, totalMs / 1000L);
             int remainingSec = (int) Math.max(0L, Math.min(totalSec, remainingNow / 1000L));
-            int elapsedSec = totalSec - remainingSec;
 
             b.setStyle(new NotificationCompat.ProgressStyle()
                     .setStyledByProgress(true)
                     .setProgressSegments(Collections.singletonList(
                             new NotificationCompat.ProgressStyle.Segment(totalSec)
                                     .setColor(progressColor())))
-                    .setProgress(elapsedSec));
+                    // remainingSec, not elapsed: "behind progress" (0..progress)
+                    // is the filled/emphasized region, so passing the shrinking
+                    // value here is what makes the bar drain full -> empty as a
+                    // countdown, rather than fill up like a completion meter.
+                    .setProgress(remainingSec));
         }
 
         b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
