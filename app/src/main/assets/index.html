@@ -165,22 +165,29 @@
   }
   /* Both clock styles share the same viewBox and coordinate system, so
      there's no technical reason to size them differently -- this matches
-     what was previously only the analog size. */
-  body.fs .face{width:74vmin;height:74vmin}
+     what was previously only the analog size. !important on every rule
+     in this block: #page-clock.on .face (the wide-screen sidebar layout,
+     an id selector) otherwise silently outranks these two-class
+     selectors on any desktop-width screen, capping the full-screen face
+     at that layout's 420px ceiling no matter how large the actual
+     full-screen viewport was -- the same kind of specificity bug as the
+     page-visibility one earlier, just harder to spot since nothing
+     looked *wrong*, only smaller than it should've been. */
+  body.fs .face{width:78vmin!important;height:78vmin!important}
   /* .inset (digital) sits inside the ring, so it can be sized generously.
      The analog caption stays small -- roughly .tod's scale -- rather than
      the big display size a caption gets outside full screen; at that size
      it was overflowing the viewport and pushing the buttons off. */
-  body.fs .digits.inset{font-size:9vmin}
-  body.fs .digits:not(.inset){font-size:4.5vmin}
-  body.fs .timeleft-slot{min-height:4.5vmin;margin-top:1.5vh}
+  body.fs .digits.inset{font-size:9vmin!important}
+  body.fs .digits:not(.inset){font-size:4.5vmin!important}
+  body.fs .timeleft-slot{min-height:4.5vmin!important;margin-top:1.5vh}
   body.fs .tod{font-size:4vmin;margin-top:2vmin}
   @media (orientation:landscape){
     body.fs .clockwrap{padding:2vh 4vw}
-    body.fs .face{width:78vmin;height:78vmin}
-    body.fs .digits.inset{font-size:8vmin;margin-top:0}
-    body.fs .digits:not(.inset){font-size:3.5vmin}
-    body.fs .timeleft-slot{min-height:3.5vmin;margin-top:1vh}
+    body.fs .face{width:80vmin!important;height:80vmin!important}
+    body.fs .digits.inset{font-size:8vmin!important;margin-top:0}
+    body.fs .digits:not(.inset){font-size:3.5vmin!important}
+    body.fs .timeleft-slot{min-height:3.5vmin!important;margin-top:1vh}
   }
 
 
