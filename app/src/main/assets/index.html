@@ -853,7 +853,53 @@ function nextBlock(){
   return { label: labelFor(m), ms: modeSeconds(m)*1000 };
 }
 
+/* Survives a page refresh (or reopening the tab) even with no native
+   service backing it up, unlike everything below NATIVE-gates on. Keyed
+   separately from the main save so it never reaches Firestore: like the
+   Android service, the live timer stays local to whatever device/tab is
+   actually running it. An absolute end time rather than a remaining-
+   seconds count, so it stays correct no matter how long the page was
+   actually closed for -- recomputed from wall-clock time on restore,
+   not just resumed from a stale countdown. */
+var LIVE_KEY = "studyClock.v1.live";
+function saveLiveTimer(){
+  try{
+    localStorage.setItem(LIVE_KEY, JSON.stringify({
+      mode: mode,
+      running: running,
+      endTime: running ? Math.round(Date.now() + Math.max(0, remaining)*1000) : null,
+      pausedRemainingMs: running ? 0 : Math.round(Math.max(0, remaining)*1000)
+    }));
+  }catch(e){}
+}
+function clearLiveTimer(){
+  try{ localStorage.removeItem(LIVE_KEY); }catch(e){}
+}
+/* On the Android app, the foreground service is the more authoritative
+   source (it kept running even if the WebView didn't); this local
+   snapshot is only consulted for a plain web session. */
+function restoreLiveTimer(){
+  if(NATIVE){ adoptNativeState(); return; }
+  try{
+    var raw = localStorage.getItem(LIVE_KEY);
+    if(!raw) return;
+    var s = JSON.parse(raw);
+    if(!s || !s.mode) return;
+    mode = s.mode;
+    document.body.classList.toggle("rest", mode !== "focus");
+    if(s.running && s.endTime){
+      running = true;
+      remaining = Math.max(0, (s.endTime - Date.now())/1000);
+    }else{
+      running = false;
+      remaining = Math.max(0, (s.pausedRemainingMs||0)/1000);
+    }
+    lastTick = Date.now();
+  }catch(e){}
+}
+
 function nativeSync(){
+  saveLiveTimer();
   if(!NATIVE) return;
   try{
     if(running){
@@ -875,6 +921,7 @@ function nativeSync(){
   }catch(e){}
 }
 function nativeStop(){
+  clearLiveTimer();
   if(!NATIVE) return;
   try{ window.AndroidTimer.stopTimer(); nativeLive = false; }catch(e){}
 }
@@ -1596,7 +1643,7 @@ function adoptNativeState(){
 }
 window.addEventListener("beforeunload", function(){ save(true); });
 document.addEventListener("visibilitychange", function(){
-  if(document.hidden) save(true); else adoptNativeState();
+  if(document.hidden) save(true); else restoreLiveTimer();
 });
 
 /* ---------- wake lock ---------- */
@@ -1622,7 +1669,7 @@ var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
 remaining = modeSeconds("focus");
 lastTick = Date.now();
-adoptNativeState(); // overrides the defaults above if a block is already running
+restoreLiveTimer(); // overrides the defaults above if a block is already running
 applyTheme();
 renderAll();
 showPage("clock");
