@@ -1,5 +1,6 @@
 package app.studyclock;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -15,10 +16,16 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 /**
- * Two jobs:
- *   1. Keep the process alive so the WebView's timer keeps counting with the screen off.
- *   2. Show an ongoing notification whose countdown Android renders itself, which means
- *      no per-second work and no battery drain from updating it.
+ * Owns the running block rather than only drawing it.
+ *
+ * The page is still where a session is decided, but once a block starts the
+ * service holds the end time, the paused state, and one block of lookahead, so
+ * it can roll over on its own. That matters because the WebView's timers are
+ * throttled when the app is backgrounded, so the page cannot be relied on to
+ * notice that a block ended.
+ *
+ * The page stays authoritative. When it wakes it recomputes and calls
+ * startTimer, which overwrites whatever the service decided in the meantime.
  */
 public class TimerService extends Service {
 
@@ -26,19 +33,25 @@ public class TimerService extends Service {
     public static final String ACTION_TOGGLE = "app.studyclock.TOGGLE";
     public static final String ACTION_SKIP = "app.studyclock.SKIP";
     public static final String ACTION_STOP = "app.studyclock.STOP";
+    public static final String ACTION_BLOCK_END = "app.studyclock.BLOCK_END";
 
-    /* Set with the raw keys rather than the API-36 setters, so this compiles on any SDK.
-       Devices that do not know them ignore them and show a normal ongoing notification. */
+    /* Raw key rather than the API-36 setter, so this compiles on any SDK.
+       Devices that do not know it ignore it and show a normal ongoing notification. */
     private static final String EXTRA_PROMOTED = "android.requestPromotedOngoing";
-    /* The few characters shown in the collapsed status bar chip. */
-    private static final String EXTRA_SHORT_CRITICAL = "android.shortCriticalText";
+
     public static final String EXTRA_END = "end";
     public static final String EXTRA_LABEL = "label";
+    public static final String EXTRA_NEXT_LABEL = "nextLabel";
+    public static final String EXTRA_NEXT_MS = "nextMs";
+    public static final String EXTRA_AUTO = "auto";
 
     private static final String CH_ONGOING = "timer";
     private static final String CH_ALERT = "blockdone";
     private static final int ID_ONGOING = 1;
     private static final int ID_ALERT = 2;
+
+    /** Wait this long past the end before acting, to let a live page get there first. */
+    private static final long GRACE_MS = 1500L;
 
     private static TimerService instance;
 
@@ -48,21 +61,45 @@ public class TimerService extends Service {
     public static void setCommandListener(CommandListener l) { listener = l; }
 
     private boolean paused = false;
+    /** Milliseconds left, frozen, while paused. Zero means the block is spent. */
+    private long pausedRemaining = 0L;
 
     private long endTime;
     private String label = "Focus";
+
+    /** One block of lookahead, handed over by the page when a block starts. */
+    private String nextLabel = null;
+    private long nextMs = 0L;
+    private boolean auto = false;
 
     public static boolean isRunning() {
         return instance != null;
     }
 
-    /** Update the notification of an already-running service, safe from the background. */
-    public static void updateRunning(long end, String label) {
+    /** Update an already-running service, safe from the background. */
+    public static void updateRunning(long end, String label,
+                                     String nextLabel, long nextMs, boolean auto) {
         TimerService s = instance;
         if (s == null) return;
         s.endTime = end;
         s.label = label;
+        s.nextLabel = nextLabel;
+        s.nextMs = nextMs;
+        s.auto = auto;
         s.paused = false;
+        s.pausedRemaining = 0L;
+        s.scheduleEnd();
+        s.post();
+    }
+
+    /** Freeze the countdown with this much left, keeping the notification up. */
+    public static void pause(long remainingMs, String label) {
+        TimerService s = instance;
+        if (s == null) return;
+        s.paused = true;
+        s.pausedRemaining = Math.max(0L, remainingMs);
+        if (label != null) s.label = label;
+        s.cancelEnd();
         s.post();
     }
 
@@ -76,25 +113,106 @@ public class TimerService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
+
         if (ACTION_START.equals(action)) {
             endTime = intent.getLongExtra(EXTRA_END, System.currentTimeMillis());
             String l = intent.getStringExtra(EXTRA_LABEL);
             if (l != null) label = l;
+            nextLabel = intent.getStringExtra(EXTRA_NEXT_LABEL);
+            nextMs = intent.getLongExtra(EXTRA_NEXT_MS, 0L);
+            auto = intent.getBooleanExtra(EXTRA_AUTO, false);
             paused = false;
+            pausedRemaining = 0L;
+            scheduleEnd();
+
         } else if (ACTION_TOGGLE.equals(action)) {
-            paused = !paused;
+            // Act locally first, so the button still works when the page is gone.
+            if (paused) {
+                endTime = System.currentTimeMillis() + pausedRemaining;
+                paused = false;
+                pausedRemaining = 0L;
+                scheduleEnd();
+            } else {
+                paused = true;
+                pausedRemaining = Math.max(0L, endTime - System.currentTimeMillis());
+                cancelEnd();
+            }
             if (listener != null) listener.onCommand("toggle");
+
         } else if (ACTION_SKIP.equals(action)) {
             if (listener != null) listener.onCommand("skip");
+
+        } else if (ACTION_BLOCK_END.equals(action)) {
+            onBlockEnd();
+
         } else if (ACTION_STOP.equals(action)) {
             if (listener != null) listener.onCommand("stop");
+            cancelEnd();
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
+
         startForeground(ID_ONGOING, build());
         // Restart if Android kills us under memory pressure.
         return START_STICKY;
+    }
+
+    /**
+     * The block ran out while nobody was watching. If the page was alive it has
+     * already pushed the end time forward, and the second check sends us home.
+     */
+    private void onBlockEnd() {
+        if (paused) return;
+        if (System.currentTimeMillis() < endTime) return;
+
+        alertFinished(this, label + " done",
+                nextLabel != null ? "Next: " + nextLabel : "Session finished.");
+
+        if (nextLabel == null || nextMs <= 0L) {
+            // Nothing queued, so stop counting rather than run into negative time.
+            paused = true;
+            pausedRemaining = 0L;
+            return;
+        }
+
+        String queuedLabel = nextLabel;
+        long queuedMs = nextMs;
+        // Only one block of lookahead. The page refills it when it wakes.
+        nextLabel = null;
+        nextMs = 0L;
+        label = queuedLabel;
+
+        if (auto) {
+            endTime = System.currentTimeMillis() + queuedMs;
+            paused = false;
+            scheduleEnd();
+        } else {
+            paused = true;
+            pausedRemaining = queuedMs;
+        }
+    }
+
+    private void scheduleEnd() {
+        AlarmManager am = getSystemService(AlarmManager.class);
+        if (am == null) return;
+        long at = endTime + GRACE_MS;
+        PendingIntent pi = servicePi(ACTION_BLOCK_END, 13);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            } else {
+                am.setExact(AlarmManager.RTC_WAKEUP, at, pi);
+            }
+        } catch (SecurityException e) {
+            // Exact alarms not permitted here. Inexact still fires, just later.
+            am.set(AlarmManager.RTC_WAKEUP, at, pi);
+        }
+    }
+
+    private void cancelEnd() {
+        AlarmManager am = getSystemService(AlarmManager.class);
+        if (am != null) am.cancel(servicePi(ACTION_BLOCK_END, 13));
     }
 
     private void post() {
@@ -126,50 +244,28 @@ public class TimerService extends Service {
             b.setChronometerCountDown(true);
             b.setWhen(endTime);
         }
-        if (paused) b.setContentText("Paused");
+        if (paused) {
+            b.setShowWhen(false);
+            b.setContentText(pausedRemaining > 0
+                    ? "Paused at " + mmss(pausedRemaining)
+                    : "Block finished");
+        }
 
         b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
         b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
         b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
 
-        long remaining = endTime - System.currentTimeMillis();
-        boolean counting = !paused && remaining > 0;
+        Bundle promote = new Bundle();
+        promote.putBoolean(EXTRA_PROMOTED, true);
+        b.addExtras(promote);
 
-        Bundle extras = new Bundle();
-
-        // Android 16 Live Updates. Public API, no spoofing, but on One UI it
-        // depends on Developer options > "Live notifications for all apps".
-        extras.putBoolean(EXTRA_PROMOTED, true);
-
-        // Samsung's own Live Notifications keys. Ignored unless the package name
-        // is whitelisted, which is what the nowbar build flavour is for.
-        
-        b.addExtras(extras);
-
-        Notification n = b.build();
-        NowBar.logEligibility(this, n);
-        return n;
+        return b.build();
     }
 
-    /** The page sends "Focus &#183; <task or category>", "Short break" or "Long break". */
-    private boolean isFocus() {
-        return label != null && label.startsWith("Focus");
-    }
-
-    /** Headline for the lock screen card: the task or category when there is one. */
-    private String nowBarPrimary() {
-        if (label == null) return "Study Clock";
-        int dot = label.indexOf('\u00b7');
-        return dot > 0 ? label.substring(dot + 1).trim() : label;
-    }
-
-    /** Second line: what kind of block it is, or Paused. */
-    private String nowBarSecondary() {
-        if (paused) return "Paused";
-        if (label == null) return null;
-        int dot = label.indexOf('\u00b7');
-        // A break label already says everything, so no second line for it.
-        return dot > 0 ? label.substring(0, dot).trim() : null;
+    static String mmss(long ms) {
+        long secs = Math.max(0L, ms) / 1000L;
+        long m = secs / 60L, s = secs % 60L;
+        return m + ":" + (s < 10 ? "0" : "") + s;
     }
 
     private PendingIntent servicePi(String action, int req) {
@@ -225,6 +321,7 @@ public class TimerService extends Service {
 
     @Override
     public void onDestroy() {
+        cancelEnd();
         instance = null;
         listener = null;
         super.onDestroy();
