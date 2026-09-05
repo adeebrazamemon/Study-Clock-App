@@ -151,6 +151,11 @@
   body.fs .shell{padding:0;max-width:none}
   body.fs .tabs,body.fs header.top,body.fs .mode-row,body.fs .cyclenote,
   body.fs #chipcard,body.fs .clockextras,body.fs .todayline{display:none!important}
+  /* .sidebar (Categories + To-do, merged in here on wide screens) predates
+     this rule -- without it, .clockwrap goes position:fixed below but the
+     sidebar stays in normal flow, floating at the top of an otherwise
+     empty page instead of being hidden like the rest of the chrome. */
+  body.fs .sidebar{display:none!important}
   body.fs .page{display:none}
   body.fs .page#page-clock{display:block}
   body.fs .card{border:none;background:none;padding:0}
