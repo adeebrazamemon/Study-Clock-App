@@ -184,6 +184,7 @@
   button.primary:hover{filter:brightness(1.08);box-shadow:0 4px 14px -2px color-mix(in srgb, var(--focus) 65%, transparent)}
   button.ghost:hover{border-color:var(--muted)}
   .cyclenote{color:var(--muted);font-size:13px;margin-top:15px}
+  .goalmeta .cyclenote{margin:0;flex:1;text-align:center;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
 
   /* ---------- full screen ---------- */
   body.fs .shell{padding:0;max-width:none}
@@ -642,10 +643,8 @@
 
         <div class="goalwrap" id="goalwrap">
           <div class="goalbar" id="goalbar"></div>
-          <div class="goalmeta"><span id="goalnow">0h 00m</span><span id="goalof">of 4h</span></div>
+          <div class="goalmeta"><span id="goalnow">0h 00m</span><span class="cyclenote" id="cyclenote">Session 1 of 4</span><span id="goalof">of 4h</span></div>
         </div>
-
-        <div class="cyclenote" id="cyclenote">Session 1 of 4 before the long break</div>
 
         <div class="clockextras">
           <button class="ghost" id="fsbtn">Full screen</button>
@@ -757,7 +756,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.6</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.7</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -1514,7 +1513,8 @@ function renderClock(){
   renderGoalBar();
   var done = state.completed % state.settings.cycles;
   document.getElementById("cyclenote").textContent =
-    "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
+    "Session " + (done+1) + " of " + state.settings.cycles;
+  document.getElementById("cyclenote").title = "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
   document.title = (running ? label + " " : "") +
     (mode === "focus" ? "Focus" : "Break") + " \u00b7 Study Clock";
 }
