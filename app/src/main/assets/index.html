@@ -716,12 +716,13 @@
     </div>
     <div class="field"><label>Accent color</label>
       <div class="swatches" id="accent-swatches">
-        <button type="button" class="swatch" data-accent="emerald" style="--sw:#1F6F5C" aria-label="Emerald" aria-pressed="false"></button>
-        <button type="button" class="swatch" data-accent="ocean" style="--sw:#2F6F9A" aria-label="Ocean" aria-pressed="false"></button>
-        <button type="button" class="swatch" data-accent="violet" style="--sw:#6B5B95" aria-label="Violet" aria-pressed="false"></button>
-        <button type="button" class="swatch" data-accent="rose" style="--sw:#B5456B" aria-label="Rose" aria-pressed="false"></button>
-        <button type="button" class="swatch" data-accent="amber" style="--sw:#B5761F" aria-label="Amber" aria-pressed="false"></button>
-        <input type="color" class="swatch-custom" id="in-accent-custom" title="Custom accent colour" value="#1F6F5C">
+        <button type="button" class="swatch" data-color="#1F6F5C" style="--sw:#1F6F5C" aria-label="Emerald" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-color="#2F6F9A" style="--sw:#2F6F9A" aria-label="Ocean" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-color="#2E9188" style="--sw:#2E9188" aria-label="Teal" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-color="#6B5B95" style="--sw:#6B5B95" aria-label="Violet" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-color="#B5456B" style="--sw:#B5456B" aria-label="Rose" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-color="#B5761F" style="--sw:#B5761F" aria-label="Amber" aria-pressed="false"></button>
+        <input type="color" class="swatch-custom" id="in-accent-custom" title="Any colour" value="#1F6F5C">
       </div>
     </div>
     <div class="field"><label for="in-style">Clock style</label>
@@ -754,7 +755,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.2</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.3</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -1389,21 +1390,17 @@ function applyTheme(){
 
   // Accent: a preset, or a custom colour (soft tint derived via color-mix so
   // it works in both light and dark). Clear any previous inline override first.
+  // Accent is just a colour now (pick from the palette or "any colour"). One
+  // colour drives both focus and breaks; empty = the theme's default colours.
+  root.removeAttribute("data-accent");
   root.style.removeProperty("--focus"); root.style.removeProperty("--focus-soft");
   root.style.removeProperty("--rest"); root.style.removeProperty("--rest-soft");
-  var accent = s.accent || "emerald";
-  if(accent === "custom" && s.accentColor){
-    root.removeAttribute("data-accent");
+  if(s.accentColor){
     var soft = "color-mix(in srgb, " + s.accentColor + " 15%, var(--surface))";
-    // One custom colour drives both focus and breaks.
     root.style.setProperty("--focus", s.accentColor);
     root.style.setProperty("--focus-soft", soft);
     root.style.setProperty("--rest", s.accentColor);
     root.style.setProperty("--rest-soft", soft);
-  }else if(accent === "emerald"){
-    root.removeAttribute("data-accent");
-  }else{
-    root.setAttribute("data-accent", accent);
   }
 
   // Optional clock-face elements.
@@ -2012,15 +2009,16 @@ document.getElementById("in-accent-custom").addEventListener("input", function()
   save(true); applyTheme(); syncAccentSwatches();
 });
 function syncAccentSwatches(){
-  var want = state.settings.accent || "emerald";
+  var want = (state.settings.accentColor || "").toLowerCase();
   Array.prototype.forEach.call(document.querySelectorAll("#accent-swatches .swatch"), function(x){
-    x.setAttribute("aria-pressed", x.getAttribute("data-accent") === want);
+    x.setAttribute("aria-pressed", (x.getAttribute("data-color") || "").toLowerCase() === want);
   });
 }
 Array.prototype.forEach.call(document.querySelectorAll("#accent-swatches .swatch"), function(b){
   b.addEventListener("click", function(){
-    state.settings.accent = b.getAttribute("data-accent");
+    state.settings.accentColor = b.getAttribute("data-color");
     save(true); applyTheme(); syncAccentSwatches();
+    document.getElementById("in-accent-custom").value = state.settings.accentColor;
   });
 });
 document.getElementById("set-save").addEventListener("click", function(){
