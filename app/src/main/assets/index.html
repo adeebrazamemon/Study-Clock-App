@@ -374,149 +374,124 @@
 
   /* ---------- wide layout: tablet & desktop ----------
      Triggers on any viewport with BOTH sides >= 600px -- a tablet in either
-     orientation, or a desktop window, but never a phone (portrait phones are
-     < 600 wide, landscape phones < 600 tall). That's what finally lets a
-     portrait tablet get the roomy merged layout instead of the cramped phone
-     one. It's the single source of truth for "is this a big screen": the
-     layoutTasksPanel() JS matches this exact query, so the To-do card moves
-     into the sidebar at the same instant its separate tab is hidden. */
+     orientation, or a desktop window, but never a phone. Single source of
+     truth for "big screen": layoutTasksPanel() matches this exact query so
+     the To-do card moves into the sidebar as its separate tab is hidden.
+
+     dvh (dynamic viewport height), NOT vh, for every clock measurement here:
+     on a mobile browser vh is the *large* viewport (measured as if the
+     address bar were retracted), so it's taller than what's actually
+     visible. Sizing the clock off vh while the page fills only the real
+     visible height is exactly what left the clock card scrolling on the
+     tablet browser. dvh tracks the height that's genuinely on screen. */
   @media (min-width:600px) and (min-height:600px){
-    /* Generous rather than unbounded: fills a maximized window on any
-       normal monitor, but stops short of stretching text/controls
-       absurdly thin on a genuine ultrawide. */
     .shell{max-width:2000px}
 
-    /* Fit-to-screen the way a native app does, with no magic pixel numbers
-       to get wrong per device: the body itself can't scroll, .shell is
-       exactly the viewport tall and stacks its children as a column, the
-       header takes its natural height, and the active page flex-fills all
-       the rest. Anything that still can't fit scrolls inside its own region
-       (the clock card, the to-do list) -- never the whole page. */
+    /* Fit-to-screen the way a native app does, no magic pixel numbers: body
+       can't scroll, .shell is exactly the viewport tall as a column, the
+       header takes its size, the active page flex-fills the rest. Overflow
+       (rare) scrolls inside a region -- the clock card, the to-do list --
+       never the whole page. */
     body{overflow:hidden}
     .shell{height:100%;display:flex;flex-direction:column}
     header.top{flex:none}
-    #page-overview.on,#page-clock.on{flex:1;min-height:0}
+    #page-overview.on,#page-clock.on{flex:1;min-height:0;min-width:0}
 
-    /* .on, not just the id: an id alone outranks .page{display:none} in
-       specificity and would leak this page's content under whichever tab is
-       actually active. minmax(230px,2fr) keeps ~80/20 on a wide screen but
-       stops the sidebar being crushed on a narrow portrait tablet. */
-    #page-clock.on{
-      display:grid;
-      grid-template-columns:8fr minmax(230px,2fr);
-      gap:24px;
-    }
-    #page-clock.on > .card, #page-clock.on > .sidebar{margin-top:0}
-    /* Last-resort: if the stack still won't fit a genuinely tiny window,
-       only the clock card scrolls -- header, tabs and sidebar stay put. */
-    #page-clock.on > .card{min-height:0;overflow-y:auto}
-    .sidebar{display:flex;flex-direction:column;min-height:0;min-width:0}
-    .sidebar > * + *{margin-top:18px}
-    /* min-width:0 down the chain: a flex item defaults to min-width:auto
-       (= its content's min width), so without this the To-do card refused
-       to shrink to its narrow sidebar column and spilled off the right edge
-       (its text input's intrinsic width was the culprit). */
-    #taskslot{flex:1;display:flex;min-height:0;min-width:0}
+    /* Shared clock internals, both orientations. */
+    #page-clock.on > .card{min-height:0;overflow-y:auto;margin-top:0}
+    .sidebar{min-width:0}
+    /* min-width:0 down the flex chain: a flex item defaults to min-width:auto
+       (its content's min width), so without this the To-do card refused to
+       shrink into a narrow column and spilled off the right edge. */
+    #taskslot{display:flex;min-height:0;min-width:0}
     #taskslot > .card{flex:1;display:flex;flex-direction:column;margin-top:0;min-height:0;min-width:0}
-    /* A long to-do list scrolls inside its own card, not the page. */
     #taskslot .tasklist{flex:1;overflow-y:auto;min-height:0}
     #tabs [data-page="tasks"]{display:none}
 
-    /* Face scales with the SMALLER of width/height (min(vw,vh)) so it's big
-       but always leaves room for the controls below, on any tablet or
-       window, portrait or landscape. */
-    #page-clock.on .face{width:clamp(200px,min(26vw,31vh),440px);height:clamp(200px,min(26vw,31vh),440px)}
     #page-clock.on .digits.inset{font-size:clamp(32px,3.4vw,58px)}
     #page-clock.on .digits:not(.inset){font-size:clamp(18px,1.6vw,26px)}
-    #page-clock.on .timeleft-slot{min-height:clamp(27px,2.4vw,40px)}
-    /* Centre the whole stack, spaced by an adaptive gap clamped to vh: a
-       short landscape tablet gets tight-but-never-touching gaps (fixing the
-       progress bar jammed against the buttons), while a tall portrait tablet
-       gets bigger gaps that fill the height instead of leaving a dead band
-       at the bottom. */
+    #page-clock.on .timeleft-slot{min-height:clamp(20px,2vw,34px)}
+    /* space-evenly + a floor gap: the gap is the MINIMUM breathing room
+       between every element (so nothing ever crams together, the old
+       progress-bar-stuck-to-buttons problem), and space-evenly then spreads
+       whatever height is left over evenly above, between and below them --
+       so the stack fills the card instead of sitting compact in the middle
+       with dead space at the ends. On a genuinely short screen the extra
+       space is zero and it falls back to just the floor gaps. */
     #page-clock.on .clockwrap{
       height:100%;display:flex;flex-direction:column;
-      align-items:center;justify-content:center;gap:clamp(12px,3.2vh,44px);
+      align-items:center;justify-content:space-evenly;gap:clamp(8px,1.6dvh,24px);
     }
     #page-clock.on .mode-row,#page-clock.on .clockdisplay,#page-clock.on .controls,
     #page-clock.on .goalwrap,#page-clock.on .cyclenote,#page-clock.on .clockextras{margin:0}
-    /* Give the progress bar a real, capped width so it centres as a tidy bar
-       rather than a full-bleed hairline stuck to the buttons. */
     #page-clock.on .goalwrap{width:100%;max-width:520px}
 
-
-    #calcard{
-      display:grid;
-      /* A fixed 2:1 ratio (fr units), not a content-sized track -- stays
-         put switching between days/months instead of shifting, and both
-         sides genuinely stretch edge to edge instead of being capped and
-         centered with dead space on either side. */
-      grid-template-columns:minmax(0,2fr) minmax(220px,1fr);
-      grid-template-areas:
-        "head bd"
-        "dow  bd"
-        "grid bd";
-      /* head/dow keep their natural size; "grid" (the day cells) takes
-         all the height that leaves -- so the calendar fills whatever
-         room the page actually has, instead of a fixed row height that
-         fit one window size and not another. */
-      grid-template-rows:auto auto 1fr;
-      column-gap:24px;
-      align-items:stretch;
-      min-height:0;
-    }
-    #calcard .calhead{grid-area:head}
-    #calcard .dow{grid-area:dow}
-    #calcard .grid{
-      grid-area:grid;min-height:0;
-      /* 1fr per (implicit) row, not a fixed px height: however many
-         week-rows a given month needs -- 5 or 6 -- they split the
-         "grid" area's real height evenly, so it always fills exactly
-         that space with no leftover gap and no overflow. Height no
-         longer follows width at all, unlike the day cells' usual
-         aspect-ratio:1/1, which is exactly what forced page scroll the
-         last time this grid was allowed to fill the screen. */
-      grid-auto-rows:1fr;
-    }
-    #calcard .day{aspect-ratio:auto}
-    #calcard .breakdown{
-      grid-area:bd;margin-top:0;border-top:none;padding-top:0;min-height:0;
-      display:flex;flex-direction:column;justify-content:center;
-    }
-
-    /* Overview: the stat strip sits beside the calendar card instead of
-       stacked above it. Its height comes from flex:1 (the shared fill rule
-       above) -- no 100vh-minus-chrome guessing -- and grid-template-rows:1fr
-       auto hands the stats/calendar row all of it, leaving the footer link
-       (Add time manually) its natural size. */
-    #page-overview.on{
-      display:grid;
-      grid-template-columns:220px 1fr;
-      grid-template-rows:1fr auto;
-      grid-template-areas:"stats cal" "foot   foot";
-      column-gap:24px;
-      align-items:stretch;
-    }
-    #page-overview.on > .card:first-child{
-      grid-area:stats;margin-top:0;min-height:0;display:flex;flex-direction:column;
-    }
-    #page-overview.on #calcard{grid-area:cal;margin-top:0}
-    #page-overview.on .footer{grid-area:foot}
-    /* flex:1 fills whatever height the calendar side set; the 4 stats
-       stack as equal rows within it (grid-template-rows:1fr each) and get
-       roomier padding/type so they read as sized for the space, not just
-       stretched blank. */
-    #page-overview.on .statgrid{
-      /* minmax(0,1fr), not a bare 1fr: on a short window these 4 rows
-         should compress before the space they're given does, rather than
-         overflow -- which, combined with .statgrid's own overflow:hidden
-         (for the divider-line trick below), was silently clipping the
-         4th stat clean off with no visible sign anything was wrong. */
-      grid-template-columns:1fr;grid-template-rows:repeat(4,minmax(0,1fr));gap:10px;flex:1;min-height:0;
-    }
     #page-overview.on .stat{display:flex;flex-direction:column;justify-content:center;padding:14px 18px;overflow:hidden}
     #page-overview.on .stat .n{font-size:22px}
     #page-overview.on .stat .l{font-size:12.5px;margin-top:3px}
+  }
+
+  /* ---- landscape tablet / desktop: clock beside its sidebar ---- */
+  @media (min-width:600px) and (min-height:600px) and (orientation:landscape){
+    #page-clock.on{display:grid;grid-template-columns:8fr minmax(230px,2fr);gap:24px}
+    #page-clock.on > .sidebar{margin-top:0}
+    .sidebar{display:flex;flex-direction:column;min-height:0}
+    .sidebar > * + *{margin-top:18px}
+    #taskslot{flex:1;min-height:0}
+    /* Face off the smaller axis so it never crowds the controls. */
+    #page-clock.on .face{width:clamp(160px,min(25vw,26dvh),440px);height:clamp(160px,min(25vw,26dvh),440px)}
+
+    /* Overview: stats column beside a full-height calendar. */
+    #page-overview.on{
+      display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr auto;
+      grid-template-areas:"stats cal" "foot foot";column-gap:24px;align-items:stretch;
+    }
+    #page-overview.on > .card:first-child{grid-area:stats;margin-top:0;min-height:0;display:flex;flex-direction:column}
+    #page-overview.on #calcard{grid-area:cal;margin-top:0}
+    #page-overview.on .footer{grid-area:foot}
+    #page-overview.on .statgrid{grid-template-columns:1fr;grid-template-rows:repeat(4,minmax(0,1fr));gap:10px;flex:1;min-height:0}
+    #calcard{
+      display:grid;grid-template-columns:minmax(0,2fr) minmax(220px,1fr);
+      grid-template-areas:"head bd" "dow bd" "grid bd";
+      grid-template-rows:auto auto 1fr;column-gap:24px;align-items:stretch;min-height:0;
+    }
+    #calcard .calhead{grid-area:head}
+    #calcard .dow{grid-area:dow}
+    #calcard .grid{grid-area:grid;min-height:0;grid-auto-rows:1fr}
+    #calcard .day{aspect-ratio:auto}
+    #calcard .breakdown{grid-area:bd;margin-top:0;border-top:none;padding-top:0;min-height:0;display:flex;flex-direction:column;justify-content:center}
+  }
+
+  /* ---- portrait tablet: everything stacked full-width ----
+     The side-by-side layout squeezed into a tall narrow column looked wrong
+     here (a dead-empty stats strip, calendar days as tall thin bars). Instead
+     each section spans the full width and stacks: on the Clock page the clock
+     fills the top and Categories + To-do sit as a row beneath it; on Overview
+     the stats run across the top, the calendar fills the middle with room for
+     real square-ish cells, and the breakdown sits below. */
+  @media (min-width:600px) and (min-height:600px) and (orientation:portrait){
+    #page-clock.on{display:flex;flex-direction:column;gap:16px}
+    #page-clock.on > .card{flex:1;min-height:0}
+    /* Categories + To-do as an equal-width row under the clock; capped so
+       the clock always stays the dominant element and the to-do list scrolls
+       inside its own panel rather than pushing the row taller. */
+    #page-clock.on > .sidebar{
+      flex:none;max-height:38dvh;display:flex;flex-direction:row;gap:16px;min-height:0;
+    }
+    #page-clock.on .sidebar > *{flex:1;margin:0;min-width:0;min-height:0}
+    #chipcard{overflow-y:auto}
+    /* Full width to work with, so the face can be generous -- still capped by
+       dvh so the row beneath always has room. */
+    #page-clock.on .face{width:clamp(220px,min(46vw,34dvh),420px);height:clamp(220px,min(46vw,34dvh),420px)}
+
+    #page-overview.on{display:flex;flex-direction:column;gap:16px}
+    #page-overview.on > .card:first-child{flex:none;margin-top:0}
+    #page-overview.on .statgrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:1px}
+    #page-overview.on #calcard{flex:1;min-height:0;margin-top:0;display:flex;flex-direction:column}
+    #page-overview.on .footer{flex:none}
+    #calcard .grid{grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;flex:1;min-height:0}
+    #calcard .day{aspect-ratio:auto}
+    #calcard .breakdown{margin-top:14px;flex:none}
   }
 </style>
 </head>
@@ -706,7 +681,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.7</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.8</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -1012,9 +987,21 @@ function setMode(m, autostart){
   renderClock(); renderModeButtons();
 }
 function toggle(){
-  running = !running;
-  lastTick = Date.now();
-  if(!running) save(true);
+  if(running){
+    // Pausing: flush the time accrued since the last tick BEFORE stopping,
+    // so nothing between the last tick and this pause is lost. tick() only
+    // does its accounting while running is still true, and it also catches
+    // up a big delta if the page had been backgrounded (throttled) up to
+    // now -- so a pause commits everything to the total then and there,
+    // with no need to press End block to make it count.
+    tick();
+    running = false;
+    lastTick = Date.now();
+    save(true);
+  }else{
+    running = true;
+    lastTick = Date.now();
+  }
   nativeSync();
   renderClock();
 }
