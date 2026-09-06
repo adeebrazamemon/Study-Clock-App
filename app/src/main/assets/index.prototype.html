@@ -29,8 +29,8 @@
   }
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){
-      --bg:#0F1513; --surface:#18201E; --ink:#E7EDEB; --muted:#93A29E;
-      --line:#2A3431; --focus:#3E9C84; --focus-soft:#172B26;
+      --bg:#0F1216; --surface:#191D23; --ink:#E6E9EE; --muted:#98A2AE;
+      --line:#2A2F38; --focus:#3E9C84; --focus-soft:#1A2A26;
       --rest:#5E8AC0; --rest-soft:#182533; --warn:#C4703F;
       --heat-lo:26,44,39; --heat-hi:96,206,175;
     }
@@ -63,6 +63,25 @@
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"])[data-accent="amber"]{ --focus:#E0A64B; --focus-soft:#2C2416; --rest:#5E8AC0; --rest-soft:#182533; }
   }
+
+  /* Dim dark tone -- a lighter charcoal for when true-dark feels too stark. */
+  :root[data-theme="dark"][data-darktone="dim"]{ --bg:#181C22; --surface:#232830; --line:#333B45; }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"])[data-darktone="dim"]{ --bg:#181C22; --surface:#232830; --line:#333B45; }
+  }
+  /* Compact density -- tighter padding/spacing throughout. */
+  :root[data-density="compact"] .card{padding:14px}
+  :root[data-density="compact"] .card + .card{margin-top:12px}
+  :root[data-density="compact"] .task{padding:7px 10px 7px 11px}
+  :root[data-density="compact"] .tasklist{gap:4px}
+  :root[data-density="compact"] .taskadd{margin-bottom:9px}
+  /* Optional clock-face elements. */
+  body.no-goal .goalwrap{display:none}
+  body.no-cycle .cyclenote{display:none}
+  /* Custom-accent colour picker in the swatch row. */
+  .swatch-custom{width:28px;height:28px;flex:none;padding:0;border:1px solid var(--line);border-radius:50%;background:none;cursor:pointer}
+  .swatch-custom::-webkit-color-swatch-wrapper{padding:2px}
+  .swatch-custom::-webkit-color-swatch{border:none;border-radius:50%}
 
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;height:100%}
@@ -695,6 +714,12 @@
         <option value="dark">Dark</option>
       </select>
     </div>
+    <div class="field"><label for="in-darktone">Dark tone</label>
+      <select id="in-darktone">
+        <option value="default">Default</option>
+        <option value="dim">Dim (softer)</option>
+      </select>
+    </div>
     <div class="field"><label>Accent color</label>
       <div class="swatches" id="accent-swatches">
         <button type="button" class="swatch" data-accent="emerald" style="--sw:#1F6F5C" aria-label="Emerald" aria-pressed="false"></button>
@@ -702,6 +727,7 @@
         <button type="button" class="swatch" data-accent="violet" style="--sw:#6B5B95" aria-label="Violet" aria-pressed="false"></button>
         <button type="button" class="swatch" data-accent="rose" style="--sw:#B5456B" aria-label="Rose" aria-pressed="false"></button>
         <button type="button" class="swatch" data-accent="amber" style="--sw:#B5761F" aria-label="Amber" aria-pressed="false"></button>
+        <input type="color" class="swatch-custom" id="in-accent-custom" title="Custom accent colour" value="#1F6F5C">
       </div>
     </div>
     <div class="field"><label for="in-style">Clock style</label>
@@ -722,8 +748,16 @@
         <option value="outline">Outline</option>
       </select>
     </div>
+    <div class="field"><label for="in-density">Layout density</label>
+      <select id="in-density">
+        <option value="comfortable">Comfortable</option>
+        <option value="compact">Compact</option>
+      </select>
+    </div>
     <div class="field"><label for="in-tod">Show the current time</label><input type="checkbox" id="in-tod"></div>
     <div class="field"><label for="in-timeleft">Show time left</label><input type="checkbox" id="in-timeleft"></div>
+    <div class="field"><label for="in-showgoal">Show progress bar</label><input type="checkbox" id="in-showgoal"></div>
+    <div class="field"><label for="in-showcycle">Show session counter</label><input type="checkbox" id="in-showcycle"></div>
   </div>
 
   <div class="dpane" id="pane-sync">
@@ -732,7 +766,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 2.9</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.0</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -802,7 +836,8 @@ var state = {
   settings:{focus:25,shortBreak:5,longBreak:15,cycles:4,goal:4,auto:true,sound:true,
             style:"digital", theme:"auto",
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
-            accent:"ocean"},
+            accent:"ocean", accentColor:"", darkTone:"default", density:"comfortable",
+            showGoal:true, showCycle:true},
   categories:[
     {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
     {id:"c2",name:"Research",color:PALETTE[1],archived:false}
@@ -1347,16 +1382,39 @@ function nativeFullscreen(on){
 
 /* ---------- theme ---------- */
 function applyTheme(){
-  var t = state.settings.theme;
-  if(t === "auto") document.documentElement.removeAttribute("data-theme");
-  else document.documentElement.setAttribute("data-theme", t);
+  var s = state.settings, root = document.documentElement;
+  var t = s.theme;
+  if(t === "auto") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", t);
   var btn = document.getElementById("themebtn");
   btn.textContent = t === "dark" ? "\u25CF" : (t === "light" ? "\u25CB" : "\u25D1");
   btn.title = "Appearance: " + (t === "auto" ? "match device" : t);
 
-  var accent = state.settings.accent || "emerald";
-  if(accent === "emerald") document.documentElement.removeAttribute("data-accent");
-  else document.documentElement.setAttribute("data-accent", accent);
+  // Dim dark tone (only bites in dark; harmless in light).
+  if(s.darkTone === "dim") root.setAttribute("data-darktone", "dim");
+  else root.removeAttribute("data-darktone");
+
+  // Accent: a preset, or a custom colour (soft tint derived via color-mix so
+  // it works in both light and dark). Clear any previous inline override first.
+  root.style.removeProperty("--focus"); root.style.removeProperty("--focus-soft");
+  var accent = s.accent || "emerald";
+  if(accent === "custom" && s.accentColor){
+    root.removeAttribute("data-accent");
+    root.style.setProperty("--focus", s.accentColor);
+    root.style.setProperty("--focus-soft", "color-mix(in srgb, " + s.accentColor + " 15%, var(--surface))");
+  }else if(accent === "emerald"){
+    root.removeAttribute("data-accent");
+  }else{
+    root.setAttribute("data-accent", accent);
+  }
+
+  // Layout density.
+  if(s.density === "compact") root.setAttribute("data-density", "compact");
+  else root.removeAttribute("data-density");
+
+  // Optional clock-face elements.
+  document.body.classList.toggle("no-goal", s.showGoal === false);
+  document.body.classList.toggle("no-cycle", s.showCycle === false);
 }
 function cycleTheme(){
   var order = ["auto","light","dark"];
@@ -1890,7 +1948,7 @@ function renderAll(){
 /* ---------- dialogs ---------- */
 var dlgSettings = document.getElementById("dlg-settings");
 var APPEARANCE = {"in-theme":"theme","in-style":"style","in-analog":"analogStyle",
-                  "in-digit":"digitStyle"};
+                  "in-digit":"digitStyle","in-darktone":"darkTone","in-density":"density"};
 
 document.getElementById("open-settings").addEventListener("click", function(){
   document.getElementById("in-focus").value = state.settings.focus;
@@ -1903,6 +1961,9 @@ document.getElementById("open-settings").addEventListener("click", function(){
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
   document.getElementById("in-tod").checked = state.settings.showTod !== false;
   document.getElementById("in-timeleft").checked = state.settings.showTimeLeft !== false;
+  document.getElementById("in-showgoal").checked = state.settings.showGoal !== false;
+  document.getElementById("in-showcycle").checked = state.settings.showCycle !== false;
+  document.getElementById("in-accent-custom").value = state.settings.accentColor || "#1F6F5C";
   syncAccentSwatches();
   renderSyncUI();
   dlgSettings.showModal();
@@ -1935,6 +1996,19 @@ document.getElementById("in-tod").addEventListener("change", function(){
 document.getElementById("in-timeleft").addEventListener("change", function(){
   state.settings.showTimeLeft = document.getElementById("in-timeleft").checked;
   save(true); renderClock();
+});
+document.getElementById("in-showgoal").addEventListener("change", function(){
+  state.settings.showGoal = document.getElementById("in-showgoal").checked;
+  save(true); applyTheme();
+});
+document.getElementById("in-showcycle").addEventListener("change", function(){
+  state.settings.showCycle = document.getElementById("in-showcycle").checked;
+  save(true); applyTheme();
+});
+document.getElementById("in-accent-custom").addEventListener("input", function(){
+  state.settings.accent = "custom";
+  state.settings.accentColor = document.getElementById("in-accent-custom").value;
+  save(true); applyTheme(); syncAccentSwatches();
 });
 function syncAccentSwatches(){
   var want = state.settings.accent || "emerald";
