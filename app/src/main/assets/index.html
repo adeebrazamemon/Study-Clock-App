@@ -69,12 +69,6 @@
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"])[data-darktone="dim"]{ --bg:#181C22; --surface:#232830; --line:#333B45; }
   }
-  /* Compact density -- tighter padding/spacing throughout. */
-  :root[data-density="compact"] .card{padding:14px}
-  :root[data-density="compact"] .card + .card{margin-top:12px}
-  :root[data-density="compact"] .task{padding:7px 10px 7px 11px}
-  :root[data-density="compact"] .tasklist{gap:4px}
-  :root[data-density="compact"] .taskadd{margin-bottom:9px}
   /* Optional clock-face elements. */
   body.no-goal .goalwrap{display:none}
   body.no-cycle .cyclenote{display:none}
@@ -544,7 +538,7 @@
     #page-clock.on .sidebar .tasklist{flex:none;height:156px;overflow-y:auto}
     /* Smaller face on portrait tablet so the whole clock stack (down to the
        Full screen / Analog row) fits without the panel needing to scroll. */
-    #page-clock.on .face{width:clamp(180px,min(34vw,24dvh),300px);height:clamp(180px,min(34vw,24dvh),300px)}
+    #page-clock.on .face{width:clamp(160px,min(30vw,21dvh),260px);height:clamp(160px,min(30vw,21dvh),260px)}
     /* The to-do bar is full width here, so split it into Today | Carried
        over columns (JS only fills the second when something carried over;
        .tasklist gets .split when both are shown -- see renderTasks). */
@@ -748,12 +742,6 @@
         <option value="outline">Outline</option>
       </select>
     </div>
-    <div class="field"><label for="in-density">Layout density</label>
-      <select id="in-density">
-        <option value="comfortable">Comfortable</option>
-        <option value="compact">Compact</option>
-      </select>
-    </div>
     <div class="field"><label for="in-tod">Show the current time</label><input type="checkbox" id="in-tod"></div>
     <div class="field"><label for="in-timeleft">Show time left</label><input type="checkbox" id="in-timeleft"></div>
     <div class="field"><label for="in-showgoal">Show progress bar</label><input type="checkbox" id="in-showgoal"></div>
@@ -766,7 +754,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.0</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.1</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -836,7 +824,7 @@ var state = {
   settings:{focus:25,shortBreak:5,longBreak:15,cycles:4,goal:4,auto:true,sound:true,
             style:"digital", theme:"auto",
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
-            accent:"ocean", accentColor:"", darkTone:"default", density:"comfortable",
+            accent:"ocean", accentColor:"", darkTone:"default",
             showGoal:true, showCycle:true},
   categories:[
     {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
@@ -989,6 +977,11 @@ function applyRemoteState(d){
   }
   save(true);
   renderAll();
+  // If the Settings dialog is open (you likely just signed in from its Sync
+  // tab), refresh its inputs so General shows the pulled values, not stale
+  // defaults that Done would otherwise write back.
+  var ds = document.getElementById("dlg-settings");
+  if(ds && ds.open) fillSettingsInputs();
   applyingRemote = false;
 }
 
@@ -1407,10 +1400,6 @@ function applyTheme(){
   }else{
     root.setAttribute("data-accent", accent);
   }
-
-  // Layout density.
-  if(s.density === "compact") root.setAttribute("data-density", "compact");
-  else root.removeAttribute("data-density");
 
   // Optional clock-face elements.
   document.body.classList.toggle("no-goal", s.showGoal === false);
@@ -1948,9 +1937,13 @@ function renderAll(){
 /* ---------- dialogs ---------- */
 var dlgSettings = document.getElementById("dlg-settings");
 var APPEARANCE = {"in-theme":"theme","in-style":"style","in-analog":"analogStyle",
-                  "in-digit":"digitStyle","in-darktone":"darkTone","in-density":"density"};
+                  "in-digit":"digitStyle","in-darktone":"darkTone"};
 
-document.getElementById("open-settings").addEventListener("click", function(){
+// Load every Settings input from state.settings. Also called when synced data
+// arrives while the dialog is open (you sign in from its Sync tab), so the
+// General inputs reflect the pulled settings instead of stale defaults --
+// otherwise hitting Done would write those defaults back over your sync.
+function fillSettingsInputs(){
   document.getElementById("in-focus").value = state.settings.focus;
   document.getElementById("in-short").value = state.settings.shortBreak;
   document.getElementById("in-long").value = state.settings.longBreak;
@@ -1965,6 +1958,9 @@ document.getElementById("open-settings").addEventListener("click", function(){
   document.getElementById("in-showcycle").checked = state.settings.showCycle !== false;
   document.getElementById("in-accent-custom").value = state.settings.accentColor || "#1F6F5C";
   syncAccentSwatches();
+}
+document.getElementById("open-settings").addEventListener("click", function(){
+  fillSettingsInputs();
   renderSyncUI();
   dlgSettings.showModal();
 });
