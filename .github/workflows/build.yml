@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to publish the APK to a release
 
     steps:
       - uses: actions/checkout@v4
@@ -38,3 +40,13 @@ jobs:
           name: study-clock-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Publish the same APK to a rolling "latest" release, so the website's
+      # Download button can point at a stable public URL that always serves
+      # the newest build: .../releases/latest/download/app-debug.apk
+      - name: Publish APK to latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          files: app/build/outputs/apk/debug/app-debug.apk
