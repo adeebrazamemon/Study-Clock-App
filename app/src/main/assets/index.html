@@ -316,9 +316,11 @@
     background:color-mix(in srgb, var(--tcat, var(--surface)) 7%, var(--surface));
     box-shadow:inset 4px 0 0 var(--tcat, transparent), 0 1px 2px rgba(0,0,0,.05), 0 3px 10px -5px rgba(0,0,0,.10);
     transition:box-shadow .15s, background .15s, border-color .15s}
-  .task.active{border-color:var(--focus);
-    background:color-mix(in srgb, var(--tcat, var(--focus)) 12%, var(--focus-soft));
-    box-shadow:inset 4px 0 0 var(--tcat, var(--focus)), 0 2px 12px -3px color-mix(in srgb, var(--focus) 40%, transparent)}
+  /* Active = a stronger shade of the task's OWN category colour, never the
+     app accent -- so tapping a task highlights it in its own colour. */
+  .task.active{border-color:var(--tcat, var(--line));
+    background:color-mix(in srgb, var(--tcat, var(--surface)) 18%, var(--surface));
+    box-shadow:inset 4px 0 0 var(--tcat, var(--line)), 0 2px 12px -3px color-mix(in srgb, var(--tcat, var(--surface)) 45%, transparent)}
   .task.done{opacity:.55}
   .tick{
     width:21px;height:21px;flex:none;border:1.5px solid var(--muted);border-radius:5px;
@@ -749,7 +751,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.4</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.5</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
