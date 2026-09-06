@@ -708,7 +708,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.2</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.3</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -1002,6 +1002,10 @@ var mode = "focus", running = false, remaining = 25*60, lastTick = 0;
    Lets commitElapsed() be idempotent (see there); rides along in the
    live-timer snapshot so it survives a refresh. */
 var blockCommitted = 0;
+/* Each mode's paused progress (remaining + banked seconds), so tapping a
+   mode tab only SELECTS that mode and never throws away another mode's
+   in-progress session -- you can tab away and back and it's still there. */
+var remainingByMode = {};
 
 function modeSeconds(m){
   if(m === "focus") return state.settings.focus*60;
@@ -1012,8 +1016,27 @@ function setMode(m, autostart){
   mode = m;
   remaining = modeSeconds(m);
   blockCommitted = 0;   // fresh block, nothing banked yet
+  delete remainingByMode[m];   // a genuinely fresh block, drop any stash
   document.body.classList.toggle("rest", m !== "focus");
   running = !!autostart;
+  lastTick = Date.now();
+  nativeSync();
+  renderClock(); renderModeButtons();
+}
+/* A mode-tab tap. Unlike setMode() it does NOT reset the block: it stashes
+   the current mode's paused progress and restores the tapped mode's (or a
+   fresh block if it was never started). The session only truly resets when a
+   block finishes (setMode) or Reset is pressed -- so pausing Focus, tapping
+   Short break, and tapping back to Focus leaves Focus exactly where it was. */
+function selectMode(m){
+  if(m === mode || running) return;
+  remainingByMode[mode] = {remaining:remaining, committed:blockCommitted};
+  mode = m;
+  document.body.classList.toggle("rest", m !== "focus");
+  var saved = remainingByMode[m];
+  remaining = saved ? saved.remaining : modeSeconds(m);
+  blockCommitted = saved ? saved.committed : 0;
+  running = false;
   lastTick = Date.now();
   nativeSync();
   renderClock(); renderModeButtons();
@@ -1041,6 +1064,7 @@ function resetBlock(){
   running = false;
   remaining = modeSeconds(mode);
   blockCommitted = 0;
+  remainingByMode = {};   // Reset = clean slate for every mode
   state.completed = 0;
   save(true); nativeStop(); renderClock();
 }
@@ -1993,9 +2017,9 @@ document.getElementById("endblock").addEventListener("click", endBlock);
    tapping a different mode tab while something else is running must not
    silently kill it. Switching mode is only live while nothing is running,
    or when re-selecting the mode already showing. */
-document.getElementById("m-focus").addEventListener("click", function(){ if(running && mode !== "focus") return; setMode("focus", false); });
-document.getElementById("m-short").addEventListener("click", function(){ if(running && mode !== "shortBreak") return; setMode("shortBreak", false); });
-document.getElementById("m-long").addEventListener("click", function(){ if(running && mode !== "longBreak") return; setMode("longBreak", false); });
+document.getElementById("m-focus").addEventListener("click", function(){ selectMode("focus"); });
+document.getElementById("m-short").addEventListener("click", function(){ selectMode("shortBreak"); });
+document.getElementById("m-long").addEventListener("click", function(){ selectMode("longBreak"); });
 document.getElementById("themebtn").addEventListener("click", cycleTheme);
 document.getElementById("fsbtn").addEventListener("click", function(){ setFullscreen(true); });
 document.getElementById("exitfs").addEventListener("click", function(){ setFullscreen(false); });
@@ -2124,7 +2148,7 @@ showPage("clock");
 layoutTasksPanel();
 nativeSync();
 setInterval(tick, 250);
-setInterval(function(){ renderStats(); renderCalendar(); }, 60000);
+setInterval(function(){ renderStats(); renderCalendar(); renderTasks(); }, 60000);
 setInterval(updateWakeLock, 1000);
 document.addEventListener("visibilitychange", updateWakeLock);
 

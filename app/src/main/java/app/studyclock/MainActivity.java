@@ -129,7 +129,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideSystemBars();
+        if (hasFocus) {
+            hideSystemBars();
+            // Pulling the notification shade / quick settings and swiping it
+            // back leaves the bars stuck visible: this focus-regained hide can
+            // fire before the shade's close animation finishes and get
+            // overridden. Re-hide once more a moment later so they actually
+            // tuck away on their own, the way other full-screen apps do.
+            getWindow().getDecorView().postDelayed(this::hideSystemBars, 600);
+        }
     }
 
     /** The manifest lists orientation/screenSize/etc. under
