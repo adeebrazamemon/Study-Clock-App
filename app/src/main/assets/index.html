@@ -277,6 +277,10 @@
     padding:0 18px;font:inherit;font-weight:600;cursor:pointer;flex:none;
   }
   .tasklist{display:flex;flex-direction:column;gap:5px}
+  .tcol{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .tcol + .tcol{margin-top:8px}   /* stacked (phone / no split): space between */
+  .tasklist.split .tcol + .tcol{margin-top:0}
+  .tcol-head{font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
   .task-divider{
     font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
     color:var(--muted);margin:6px 0 1px;padding-top:8px;border-top:1px solid var(--line);
@@ -486,17 +490,24 @@
   @media (min-width:600px) and (min-height:600px) and (orientation:portrait){
     #page-clock.on{display:flex;flex-direction:column;gap:16px}
     #page-clock.on > .card{flex:1;min-height:0}
-    /* Categories + To-do as an equal-width row under the clock; capped so
-       the clock always stays the dominant element and the to-do list scrolls
-       inside its own panel rather than pushing the row taller. */
+    /* Categories then To-do as full-width bars stacked under the clock:
+       categories need little height (just a row of chips), so it's a slim
+       bar; the to-do gets the full width and shows a few rows then scrolls. */
     #page-clock.on > .sidebar{
-      flex:none;max-height:38dvh;display:flex;flex-direction:row;gap:16px;min-height:0;
+      flex:none;display:flex;flex-direction:column;gap:14px;min-height:0;
     }
-    #page-clock.on .sidebar > *{flex:1;margin:0;min-width:0;min-height:0}
-    #chipcard{overflow-y:auto}
-    /* Full width to work with, so the face can be generous -- still capped by
-       dvh so the row beneath always has room. */
-    #page-clock.on .face{width:clamp(220px,min(46vw,34dvh),420px);height:clamp(220px,min(46vw,34dvh),420px)}
+    #page-clock.on .sidebar > *{margin:0;min-width:0}
+    /* Cap each to-do column at ~4 rows, then scroll inside it -- so adding
+       more tasks doesn't keep growing the bar and shrinking the clock. */
+    #page-clock.on .sidebar .tasklist{flex:none;max-height:196px;overflow-y:auto}
+    /* Slightly smaller face on portrait tablet so the two bars have room. */
+    #page-clock.on .face{width:clamp(200px,min(42vw,30dvh),380px);height:clamp(200px,min(42vw,30dvh),380px)}
+    /* The to-do bar is full width here, so split it into Today | Carried
+       over columns (JS only fills the second when something carried over;
+       .tasklist gets .split when both are shown -- see renderTasks). */
+    #page-clock.on #taskcard .tasklist.split{
+      display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;align-items:start;
+    }
 
     #page-overview.on{display:flex;flex-direction:column;gap:16px}
     #page-overview.on > .card:first-child{flex:none;margin-top:0}
@@ -695,7 +706,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.0</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.1</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -1573,6 +1584,7 @@ function renderTasks(){
   var wrap = document.getElementById("tasklist");
   var note2 = document.getElementById("tasknote");
   wrap.innerHTML = "";
+  wrap.classList.remove("split");
   var today = key(new Date());
   var open = visibleTasks().filter(function(t){ return !t.done; });
   var done = visibleTasks().filter(function(t){ return t.done; });
@@ -1588,17 +1600,27 @@ function renderTasks(){
     return;
   }
 
-  todayList.forEach(function(t){ wrap.appendChild(buildTaskRow(t)); });
+  // Today column (with done-today tacked on the end). Carried over is its
+  // own column, shown ONLY when something actually carried over -- and when
+  // it is, the two sit side by side (the .split grid, wide layout only).
+  function column(label, list){
+    var col = document.createElement("div");
+    col.className = "tcol";
+    var h = document.createElement("div");
+    h.className = "tcol-head";
+    h.textContent = label;
+    col.appendChild(h);
+    list.forEach(function(t){ col.appendChild(buildTaskRow(t)); });
+    return col;
+  }
+  var todayCol = column("Today", todayList);
+  done.forEach(function(t){ todayCol.appendChild(buildTaskRow(t)); });
+  wrap.appendChild(todayCol);
 
   if(carriedList.length){
-    var div = document.createElement("div");
-    div.className = "task-divider";
-    div.textContent = "Carried over";
-    wrap.appendChild(div);
-    carriedList.forEach(function(t){ wrap.appendChild(buildTaskRow(t)); });
+    wrap.classList.add("split");
+    wrap.appendChild(column("Carried over", carriedList));
   }
-
-  done.forEach(function(t){ wrap.appendChild(buildTaskRow(t)); });
 
   var bits = [];
   var at = getTask(state.activeTask);
