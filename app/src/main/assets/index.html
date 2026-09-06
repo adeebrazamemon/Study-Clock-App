@@ -195,7 +195,12 @@
   /* Digits scale off both axes too, for the same reason. */
   body.fs .digits.inset{font-size:min(11vw,8vh)!important}
   body.fs .digits:not(.inset){font-size:min(4.6vw,3.4vh)!important}
-  body.fs .timeleft-slot{min-height:0!important;margin:0!important}
+  /* Reserve the analog caption's height whether or not it's showing: in
+     digital the caption moves inside the face and this slot is empty, so if
+     it collapsed to 0 (which min-height:0 did) everything below jumped up
+     when switching digital<->analog. A fixed height a touch taller than the
+     caption keeps the whole stack locked across the toggle. */
+  body.fs .timeleft-slot{min-height:min(6vw,4.4vh)!important;margin:0!important}
   body.fs .tod{font-size:min(4vw,3vh);margin:0}
 
 
@@ -410,7 +415,13 @@
 
     #page-clock.on .digits.inset{font-size:clamp(32px,3.4vw,58px)}
     #page-clock.on .digits:not(.inset){font-size:clamp(18px,1.6vw,26px)}
-    #page-clock.on .timeleft-slot{min-height:clamp(20px,2vw,34px)}
+    /* Reserve a hair more than the analog caption ever renders (its box was
+       ~2px taller than this slot's old min-height), so the slot is the exact
+       same height whether it holds the caption (analog) or is empty (digital
+       moves it inside the face) -- otherwise that 2px grew the stack and
+       space-evenly rippled it into a visible ~1px shift of everything below
+       on every Analog/Digital toggle. */
+    #page-clock.on .timeleft-slot{min-height:clamp(26px,2.4vw,36px)}
     /* space-evenly + a floor gap: the gap is the MINIMUM breathing room
        between every element (so nothing ever crams together, the old
        progress-bar-stuck-to-buttons problem), and space-evenly then spreads
@@ -439,7 +450,7 @@
     .sidebar > * + *{margin-top:18px}
     #taskslot{flex:1;min-height:0}
     /* Face off the smaller axis so it never crowds the controls. */
-    #page-clock.on .face{width:clamp(160px,min(25vw,26dvh),440px);height:clamp(160px,min(25vw,26dvh),440px)}
+    #page-clock.on .face{width:clamp(160px,min(25vw,25dvh),440px);height:clamp(160px,min(25vw,25dvh),440px)}
 
     /* Overview: stats column beside a full-height calendar. */
     #page-overview.on{
@@ -681,7 +692,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.8</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.9</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
