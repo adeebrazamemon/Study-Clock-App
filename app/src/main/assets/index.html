@@ -22,8 +22,8 @@
   }
   .dark-tokens{}
   :root[data-theme="dark"]{
-    --bg:#0F1513; --surface:#18201E; --ink:#E7EDEB; --muted:#93A29E;
-    --line:#2A3431; --focus:#3E9C84; --focus-soft:#172B26;
+    --bg:#0F1216; --surface:#191D23; --ink:#E6E9EE; --muted:#98A2AE;
+    --line:#2A2F38; --focus:#3E9C84; --focus-soft:#1A2A26;
     --rest:#5E8AC0; --rest-soft:#182533; --warn:#C4703F;
     --heat-lo:26,44,39; --heat-hi:96,206,175;
   }
@@ -50,6 +50,18 @@
   :root[data-theme="dark"][data-accent="violet"]{ --focus:#A08BC7; --focus-soft:#241F30; --rest:#5BB8AE; --rest-soft:#132824; }
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"])[data-accent="violet"]{ --focus:#A08BC7; --focus-soft:#241F30; --rest:#5BB8AE; --rest-soft:#132824; }
+  }
+
+  :root[data-accent="rose"]{ --focus:#B5456B; --focus-soft:#F6E1E8; --rest:#43648F; --rest-soft:#DEE6EF; }
+  :root[data-theme="dark"][data-accent="rose"]{ --focus:#E8799A; --focus-soft:#2E1B22; --rest:#5E8AC0; --rest-soft:#182533; }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"])[data-accent="rose"]{ --focus:#E8799A; --focus-soft:#2E1B22; --rest:#5E8AC0; --rest-soft:#182533; }
+  }
+
+  :root[data-accent="amber"]{ --focus:#B5761F; --focus-soft:#F6ECD8; --rest:#43648F; --rest-soft:#DEE6EF; }
+  :root[data-theme="dark"][data-accent="amber"]{ --focus:#E0A64B; --focus-soft:#2C2416; --rest:#5E8AC0; --rest-soft:#182533; }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"])[data-accent="amber"]{ --focus:#E0A64B; --focus-soft:#2C2416; --rest:#5E8AC0; --rest-soft:#182533; }
   }
 
   *{box-sizing:border-box}
@@ -688,6 +700,8 @@
         <button type="button" class="swatch" data-accent="emerald" style="--sw:#1F6F5C" aria-label="Emerald" aria-pressed="false"></button>
         <button type="button" class="swatch" data-accent="ocean" style="--sw:#2F6F9A" aria-label="Ocean" aria-pressed="false"></button>
         <button type="button" class="swatch" data-accent="violet" style="--sw:#6B5B95" aria-label="Violet" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-accent="rose" style="--sw:#B5456B" aria-label="Rose" aria-pressed="false"></button>
+        <button type="button" class="swatch" data-accent="amber" style="--sw:#B5761F" aria-label="Amber" aria-pressed="false"></button>
       </div>
     </div>
     <div class="field"><label for="in-style">Clock style</label>
@@ -718,7 +732,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 2.8</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 2.9</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
