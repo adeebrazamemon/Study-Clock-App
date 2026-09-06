@@ -345,6 +345,9 @@
   .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:0}
   .footer button:hover{color:var(--ink)}
   .clockextras{display:flex;gap:9px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+  /* Fixed width so the label swap "Analog" <-> "Digital" doesn't change the
+     button's size and shove the centred Full screen button sideways. */
+  #stylebtn{min-width:96px}
 
   @media (max-width:560px){
     /* Keep the safe-area insets the base rule carries -- an earlier version
