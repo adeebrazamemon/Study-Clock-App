@@ -451,7 +451,7 @@
 
   /* ---- landscape tablet / desktop: clock beside its sidebar ---- */
   @media (min-width:600px) and (min-height:600px) and (orientation:landscape){
-    #page-clock.on{display:grid;grid-template-columns:8fr minmax(230px,2fr);gap:24px}
+    #page-clock.on{display:grid;grid-template-columns:7fr minmax(260px,3fr);gap:24px}
     #page-clock.on > .sidebar{margin-top:0}
     .sidebar{display:flex;flex-direction:column;min-height:0}
     .sidebar > * + *{margin-top:18px}
@@ -497,11 +497,13 @@
       flex:none;display:flex;flex-direction:column;gap:14px;min-height:0;
     }
     #page-clock.on .sidebar > *{margin:0;min-width:0}
-    /* Cap each to-do column at ~4 rows, then scroll inside it -- so adding
-       more tasks doesn't keep growing the bar and shrinking the clock. */
-    #page-clock.on .sidebar .tasklist{flex:none;max-height:196px;overflow-y:auto}
-    /* Slightly smaller face on portrait tablet so the two bars have room. */
-    #page-clock.on .face{width:clamp(200px,min(42vw,30dvh),380px);height:clamp(200px,min(42vw,30dvh),380px)}
+    /* Fixed to exactly 3 task rows (plus the small column header), then it
+       scrolls -- so the to-do bar never grows past this and never shrinks the
+       clock above it. ~3*44px rows + ~24px header. */
+    #page-clock.on .sidebar .tasklist{flex:none;height:156px;overflow-y:auto}
+    /* Smaller face on portrait tablet so the whole clock stack (down to the
+       Full screen / Analog row) fits without the panel needing to scroll. */
+    #page-clock.on .face{width:clamp(180px,min(34vw,24dvh),300px);height:clamp(180px,min(34vw,24dvh),300px)}
     /* The to-do bar is full width here, so split it into Today | Carried
        over columns (JS only fills the second when something carried over;
        .tasklist gets .split when both are shown -- see renderTasks). */
@@ -706,7 +708,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.1</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.2</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
