@@ -285,8 +285,15 @@
     font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
     color:var(--muted);margin:6px 0 1px;padding-top:8px;border-top:1px solid var(--line);
   }
-  .task{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
-  .task.active{border-color:var(--focus);background:var(--focus-soft)}
+  /* Colour-coded by its category (--tcat, set per row): a soft left accent
+     bar + a faint tint of the category colour + a gentle shadow. */
+  .task{display:flex;align-items:center;gap:9px;padding:9px 11px 9px 13px;border:1px solid var(--line);border-radius:var(--radius);
+    background:color-mix(in srgb, var(--tcat, var(--surface)) 7%, var(--surface));
+    box-shadow:inset 4px 0 0 var(--tcat, transparent), 0 1px 2px rgba(0,0,0,.05), 0 3px 10px -5px rgba(0,0,0,.10);
+    transition:box-shadow .15s, background .15s, border-color .15s}
+  .task.active{border-color:var(--focus);
+    background:color-mix(in srgb, var(--tcat, var(--focus)) 12%, var(--focus-soft));
+    box-shadow:inset 4px 0 0 var(--tcat, var(--focus)), 0 2px 12px -3px color-mix(in srgb, var(--focus) 40%, transparent)}
   .task.done{opacity:.55}
   .tick{
     width:21px;height:21px;flex:none;border:1.5px solid var(--muted);border-radius:5px;
@@ -341,6 +348,9 @@
   .field input[type=text]{width:180px}
   .dialog-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
   .catrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .catcolor{width:28px;height:28px;flex:none;padding:0;border:1px solid var(--line);border-radius:7px;background:none;cursor:pointer}
+  .catcolor::-webkit-color-swatch-wrapper{padding:2px}
+  .catcolor::-webkit-color-swatch{border:none;border-radius:5px}
   .catrow .dot{width:11px;height:11px;border-radius:50%;flex:none}
   .catrow .nm{flex:1;font-size:14px}
   .catrow button{background:none;border:none;color:var(--warn);font:inherit;font-size:13px;cursor:pointer;padding:2px 4px}
@@ -708,7 +718,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 2.7</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 2.8</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -1617,15 +1627,9 @@ function buildTaskRow(t){
     save(true); renderTasks(); renderTaskChips(); renderChips(); nativeSync();
   });
 
-  var meta = document.createElement("span");
-  meta.className = "tmeta";
-  // No time shown here -- a to-do is a daily checklist item, not a log.
-  // Logged time already lives in the category totals on Overview.
-  var dot = document.createElement("span");
-  dot.className = "dot";
-  dot.style.background = catColor(t.catId);
-  dot.title = catName(t.catId);
-  meta.appendChild(dot);
+  // The whole row is colour-coded by category now (see .task CSS), so no dot.
+  row.style.setProperty("--tcat", catColor(t.catId));
+  row.title = catName(t.catId);
 
   var del = document.createElement("button");
   del.className = "tdel";
@@ -1647,7 +1651,7 @@ function buildTaskRow(t){
   });
 
   row.appendChild(tick2); row.appendChild(name);
-  row.appendChild(meta); row.appendChild(del);
+  row.appendChild(del);
   return row;
 }
 function renderTasks(){
@@ -1935,6 +1939,11 @@ document.getElementById("set-save").addEventListener("click", function(){
     var v = parseFloat(document.getElementById(id).value);
     return (isNaN(v) || v < lo || v > hi) ? dflt : v;
   }
+  // Capture BEFORE the durations change: was the block still fresh (never
+  // started/paused)? Only then do we re-apply the (possibly new) length. This
+  // stops hitting Done from wiping a paused timer -- which, now that a paused
+  // timer syncs, was resetting it on every device.
+  var wasFresh = !running && remaining >= modeSeconds(mode) - 0.5;
   state.settings.focus      = Math.round(num("in-focus",1,180,state.settings.focus));
   state.settings.shortBreak = Math.round(num("in-short",1,60,state.settings.shortBreak));
   state.settings.longBreak  = Math.round(num("in-long",1,120,state.settings.longBreak));
@@ -1942,7 +1951,7 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
-  if(!running) remaining = modeSeconds(mode);
+  if(wasFresh) remaining = modeSeconds(mode);
   save(true); dlgSettings.close(); renderAll();
 });
 
@@ -1955,11 +1964,16 @@ function renderCatList(){
   live.forEach(function(c){
     var row = document.createElement("div");
     row.className = "catrow";
-    var dot = document.createElement("span");
-    dot.className = "dot"; dot.style.background = c.color;
+    var swatch = document.createElement("input");
+    swatch.type = "color"; swatch.className = "catcolor"; swatch.value = c.color;
+    swatch.title = "Pick this category's colour";
+    swatch.addEventListener("change", function(){
+      c.color = swatch.value;
+      save(true); renderCatList(); renderAll(); nativeSync();
+    });
     var nm = document.createElement("span");
     nm.className = "nm"; nm.textContent = c.name;
-    row.appendChild(dot); row.appendChild(nm);
+    row.appendChild(swatch); row.appendChild(nm);
     if(live.length > 1){
       var del = document.createElement("button");
       del.textContent = "Remove";
