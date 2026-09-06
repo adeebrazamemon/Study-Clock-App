@@ -159,7 +159,11 @@ public class MainActivity extends AppCompatActivity {
             c.hide(WindowInsetsCompat.Type.systemBars());
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            c.show(WindowInsetsCompat.Type.systemBars());
+            // The app's baseline is edge-to-edge (bars hidden), so leaving the
+            // in-page Full screen clock must NOT c.show() the bars -- that was
+            // exactly why the status/nav bars reappeared for good after one
+            // Full-screen -> Exit round trip and never tucked away again.
+            hideSystemBars();
         }
     }
 

@@ -72,7 +72,7 @@
   .shell{
     max-width:1040px;margin:0 auto;
     padding:calc(20px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right))
-            calc(96px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
+            calc(64px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
   }
   .page{display:none}
   .page.on{display:block}
@@ -110,7 +110,9 @@
   }
   .mode-row button[aria-pressed="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus);font-weight:600}
 
-  .face{position:relative;width:250px;height:250px;margin:0 auto}
+  /* min(250px, 62vw): full size on anything roomy, but shrinks with the
+     viewport on a narrow phone instead of crowding the card edges. */
+  .face{position:relative;width:min(250px,62vw);height:min(250px,62vw);margin:0 auto}
   .face svg{display:block;width:100%;height:100%}
   .ring-track{fill:none;stroke:var(--line);stroke-width:6}
   /* Matches the 250ms tick interval exactly. A longer transition here
@@ -172,45 +174,29 @@
   body.fs .card{border:none;background:none;padding:0}
   body.fs .clockwrap{
     position:fixed;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;background:var(--bg);
-    /* env(safe-area-inset-*) (0 anywhere it doesn't apply) keeps Start/
-       Reset/Exit full screen clear of a device's bottom gesture-swipe
-       strip -- full screen is now genuinely edge-to-edge on Android
-       (see MainActivity's setDecorFitsSystemWindows), so that strip is
-       real, usable-looking space the buttons could sit inside of and
-       get visually cut off or hard to tap. */
-    padding:calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
-            calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+    align-items:center;justify-content:center;gap:clamp(12px,3vh,32px);
+    background:var(--bg);
+    /* env(safe-area-inset-*) (0 where it doesn't apply) keeps the clock and
+       buttons clear of a notch / gesture strip now that full screen is
+       genuinely edge-to-edge on Android. */
+    padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+            calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
   }
-  /* Both clock styles share the same viewBox and coordinate system, so
-     there's no technical reason to size them differently -- this matches
-     what was previously only the analog size. !important on every rule
-     in this block: #page-clock.on .face (the wide-screen sidebar layout,
-     an id selector) otherwise silently outranks these two-class
-     selectors on any desktop-width screen, capping the full-screen face
-     at that layout's 420px ceiling no matter how large the actual
-     full-screen viewport was -- the same kind of specificity bug as the
-     page-visibility one earlier, just harder to spot since nothing
-     looked *wrong*, only smaller than it should've been. */
-  body.fs .face{width:78vmin!important;height:78vmin!important}
-  /* .inset (digital) sits inside the ring, so it can be sized generously.
-     The analog caption stays small -- roughly .tod's scale -- rather than
-     the big display size a caption gets outside full screen; at that size
-     it was overflowing the viewport and pushing the buttons off. */
-  body.fs .digits.inset{font-size:9vmin!important}
-  body.fs .digits:not(.inset){font-size:4.5vmin!important}
-  body.fs .timeleft-slot{min-height:4.5vmin!important;margin-top:1.5vh}
-  body.fs .tod{font-size:4vmin;margin-top:2vmin}
-  @media (orientation:landscape){
-    body.fs .clockwrap{
-      padding:calc(2vh + env(safe-area-inset-top)) calc(4vw + env(safe-area-inset-right))
-              calc(2vh + env(safe-area-inset-bottom)) calc(4vw + env(safe-area-inset-left));
-    }
-    body.fs .face{width:80vmin!important;height:80vmin!important}
-    body.fs .digits.inset{font-size:8vmin!important;margin-top:0}
-    body.fs .digits:not(.inset){font-size:3.5vmin!important}
-    body.fs .timeleft-slot{min-height:3.5vmin!important;margin-top:1vh}
-  }
+  body.fs .clockdisplay{display:flex;flex-direction:column;align-items:center;gap:1.2vh}
+  /* THE fix for "the clock/buttons don't fit the screen": size the face off
+     BOTH axes -- min(vw, vh) -- so it's bounded by whichever is smaller on
+     this particular device and orientation, always leaving room for the
+     digits and controls. The old 78/80vmin was a % of the SHORT side only,
+     so in landscape (short side = height) an 80% face ate nearly all the
+     vertical room and pushed the buttons off the bottom edge. !important
+     because #page-clock.on .face (an id selector in the wide layout) would
+     otherwise outrank these plain two-class selectors. */
+  body.fs .face{width:min(80vw,58vh)!important;height:min(80vw,58vh)!important;margin:0}
+  /* Digits scale off both axes too, for the same reason. */
+  body.fs .digits.inset{font-size:min(11vw,8vh)!important}
+  body.fs .digits:not(.inset){font-size:min(4.6vw,3.4vh)!important}
+  body.fs .timeleft-slot{min-height:0!important;margin:0!important}
+  body.fs .tod{font-size:min(4vw,3vh);margin:0}
 
 
   /* digit styles */
@@ -219,7 +205,7 @@
   .digits.d-outline{color:transparent;-webkit-text-stroke:2px var(--focus);paint-order:stroke}
   body.fs .digits.d-outline{-webkit-text-stroke-width:3px}
 
-  body.fs .controls{margin-top:26px;opacity:.25;transition:opacity .25s}
+  body.fs .controls{margin:0;opacity:.25;transition:opacity .25s}
   body.fs .clockwrap:hover .controls,body.fs .controls:focus-within{opacity:1}
   body.fs.touched .controls{opacity:1}
   .exitfs{display:none}
@@ -356,7 +342,11 @@
   .clockextras{display:flex;gap:9px;justify-content:center;margin-top:16px;flex-wrap:wrap}
 
   @media (max-width:560px){
-    .shell{padding:14px 13px 92px}
+    /* Keep the safe-area insets the base rule carries -- an earlier version
+       here dropped them, letting the header slide under a phone's status
+       bar / notch once the app went edge-to-edge. */
+    .shell{padding:calc(14px + env(safe-area-inset-top)) calc(13px + env(safe-area-inset-right))
+                   calc(64px + env(safe-area-inset-bottom)) calc(13px + env(safe-area-inset-left));}
     .card{padding:15px}
   }
   @media (pointer:coarse){
@@ -382,89 +372,77 @@
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
-  /* ---------- wide layout (desktop/tablet) ---------- */
-  @media (min-width:900px){
+  /* ---------- wide layout: tablet & desktop ----------
+     Triggers on any viewport with BOTH sides >= 600px -- a tablet in either
+     orientation, or a desktop window, but never a phone (portrait phones are
+     < 600 wide, landscape phones < 600 tall). That's what finally lets a
+     portrait tablet get the roomy merged layout instead of the cramped phone
+     one. It's the single source of truth for "is this a big screen": the
+     layoutTasksPanel() JS matches this exact query, so the To-do card moves
+     into the sidebar at the same instant its separate tab is hidden. */
+  @media (min-width:600px) and (min-height:600px){
     /* Generous rather than unbounded: fills a maximized window on any
        normal monitor, but stops short of stretching text/controls
        absurdly thin on a genuine ultrawide. */
     .shell{max-width:2000px}
+
+    /* Fit-to-screen the way a native app does, with no magic pixel numbers
+       to get wrong per device: the body itself can't scroll, .shell is
+       exactly the viewport tall and stacks its children as a column, the
+       header takes its natural height, and the active page flex-fills all
+       the rest. Anything that still can't fit scrolls inside its own region
+       (the clock card, the to-do list) -- never the whole page. */
+    body{overflow:hidden}
+    .shell{height:100%;display:flex;flex-direction:column}
+    header.top{flex:none}
+    #page-overview.on,#page-clock.on{flex:1;min-height:0}
+
     /* .on, not just the id: an id alone outranks .page{display:none} in
-       specificity and would force this to show even when it isn't the
-       active tab, leaking its content into whichever page actually is.
-       8fr/2fr (not a fixed sidebar px width): a true 80/20 split that
-       stays 80/20 as the window resizes, instead of the clock side
-       soaking up literally all of the extra space. */
+       specificity and would leak this page's content under whichever tab is
+       actually active. minmax(230px,2fr) keeps ~80/20 on a wide screen but
+       stops the sidebar being crushed on a narrow portrait tablet. */
     #page-clock.on{
       display:grid;
-      /* Same fixed-chrome math as #page-overview.on below: 100vh minus
-         the header/margin/.shell-padding that never changes with
-         content. Without this the page just grew as tall as the clock
-         card's own stack (mode buttons, face, controls, goal bar, cycle
-         note, extras) needed, and scrolled the whole page once that
-         stack was taller than the window -- easy to hit once the face
-         itself scales up with a wide, short window. */
-      /* Plus the same safe-area insets .shell's padding now carries --
-         0 anywhere that doesn't apply, so this is exact either way. */
-      height:calc(100vh - 170px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;
-      grid-template-columns:8fr 2fr;
-      /* stretch (the default -- no align-items line needed), not start:
-         the sidebar matches the clock card's full height instead of
-         stopping short and leaving a bare gap underneath it. */
+      grid-template-columns:8fr minmax(230px,2fr);
       gap:24px;
     }
-    /* Only the grid's own two direct children (the clock card and the
-       sidebar wrapper) lose their top margin -- chipcard and taskcard
-       *inside* the sidebar still want normal .card + .card spacing
-       between them. */
     #page-clock.on > .card, #page-clock.on > .sidebar{margin-top:0}
-    /* min-height:0 lets it shrink to the row's real height instead of
-       refusing to go below its content's natural size; overflow-y:auto
-       means if the stack still doesn't fit (a very short window), only
-       the clock card itself scrolls -- header, tabs and the sidebar
-       all stay put -- instead of the whole page scrolling. */
+    /* Last-resort: if the stack still won't fit a genuinely tiny window,
+       only the clock card scrolls -- header, tabs and sidebar stay put. */
     #page-clock.on > .card{min-height:0;overflow-y:auto}
-    .sidebar{position:sticky;top:20px;display:flex;flex-direction:column;min-height:0}
-    /* #taskslot wraps the relocated #taskcard, so it's not a direct
-       sibling of #chipcard and .card + .card's spacing doesn't reach it. */
+    .sidebar{display:flex;flex-direction:column;min-height:0;min-width:0}
     .sidebar > * + *{margin-top:18px}
-    /* The to-do card is the last thing in the sidebar, so it's the one
-       that grows to use whatever height categories didn't need -- same
-       logic as the clock card being the tall reference to match. */
-    #taskslot{flex:1;display:flex;min-height:0}
-    #taskslot > .card{flex:1;display:flex;flex-direction:column;margin-top:0;min-height:0}
-    /* A long to-do list scrolls inside its own card instead of pushing
-       the sidebar (and the page) taller. */
+    /* min-width:0 down the chain: a flex item defaults to min-width:auto
+       (= its content's min width), so without this the To-do card refused
+       to shrink to its narrow sidebar column and spilled off the right edge
+       (its text input's intrinsic width was the culprit). */
+    #taskslot{flex:1;display:flex;min-height:0;min-width:0}
+    #taskslot > .card{flex:1;display:flex;flex-direction:column;margin-top:0;min-height:0;min-width:0}
+    /* A long to-do list scrolls inside its own card, not the page. */
     #taskslot .tasklist{flex:1;overflow-y:auto;min-height:0}
     #tabs [data-page="tasks"]{display:none}
 
-    /* The clock itself grows with the window too, not just the
-       whitespace around it -- scales with the left column's width
-       (roughly 80% of .shell), capped so it doesn't get absurd on a
-       very large display. min(24vw,34vh), not a bare 24vw: on a wide
-       but short window (a normal laptop's actual usable height, once
-       the browser chrome is accounted for) sizing off width alone grew
-       the face -- and everything below it -- taller than the window,
-       forcing the clock card to scroll internally to reach the session
-       note and Full screen/Analog buttons. Tying it to height too keeps
-       the whole stack inside the space actually available. */
-    #page-clock.on .face{width:clamp(250px,min(24vw,30vh),420px);height:clamp(250px,min(24vw,30vh),420px)}
-    #page-clock.on .digits.inset{font-size:clamp(34px,3.2vw,56px)}
+    /* Face scales with the SMALLER of width/height (min(vw,vh)) so it's big
+       but always leaves room for the controls below, on any tablet or
+       window, portrait or landscape. */
+    #page-clock.on .face{width:clamp(200px,min(26vw,31vh),440px);height:clamp(200px,min(26vw,31vh),440px)}
+    #page-clock.on .digits.inset{font-size:clamp(32px,3.4vw,58px)}
     #page-clock.on .digits:not(.inset){font-size:clamp(18px,1.6vw,26px)}
     #page-clock.on .timeleft-slot{min-height:clamp(27px,2.4vw,40px)}
-    /* Fixed pixel margins here (an earlier version of this fix) were
-       tuned against one specific desktop test size and still overflowed
-       on other screens -- a tablet's own font/UI metrics differ just
-       enough that "a bit tighter" in one browser wasn't tight enough in
-       another, forcing the clock card's scrollbar fallback to kick in
-       even though there was visibly room to spare. justify-content:
-       space-between can't make that mistake: it measures the *actual*
-       rendered height of every group below and turns whatever's left
-       over into the gaps between them, on any device, every time --
-       the clock card needing its own scrollbar should now be rare
-       enough that it's only ever a genuinely very short window. */
-    #page-clock.on .clockwrap{height:100%;display:flex;flex-direction:column;justify-content:space-between}
+    /* Centre the whole stack, spaced by an adaptive gap clamped to vh: a
+       short landscape tablet gets tight-but-never-touching gaps (fixing the
+       progress bar jammed against the buttons), while a tall portrait tablet
+       gets bigger gaps that fill the height instead of leaving a dead band
+       at the bottom. */
+    #page-clock.on .clockwrap{
+      height:100%;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:clamp(12px,3.2vh,44px);
+    }
     #page-clock.on .mode-row,#page-clock.on .clockdisplay,#page-clock.on .controls,
     #page-clock.on .goalwrap,#page-clock.on .cyclenote,#page-clock.on .clockextras{margin:0}
+    /* Give the progress bar a real, capped width so it centres as a tidy bar
+       rather than a full-bleed hairline stuck to the buttons. */
+    #page-clock.on .goalwrap{width:100%;max-width:520px}
 
 
     #calcard{
@@ -507,23 +485,12 @@
     }
 
     /* Overview: the stat strip sits beside the calendar card instead of
-       stacked above it, and stretches (align-items' default) to match its
-       full height instead of stopping short and leaving blank space
-       underneath. An explicit height -- 100vh minus this page's fixed
-       chrome (header + its margin + .shell's own top/bottom padding,
-       none of which vary with content) -- is what gives the calendar
-       side below a real, definite height to size itself from, rather
-       than a min-height that content could grow past. That fixed 170px
-       is real math, not a guess: 36px header + 18px header margin +
-       20px .shell padding-top + 96px .shell padding-bottom (reserved
-       for the bottom tab bar). grid-template-rows:1fr auto then gives
-       the stats/calendar row all of it, leaving the footer link (Add
-       time manually) its own natural size. */
+       stacked above it. Its height comes from flex:1 (the shared fill rule
+       above) -- no 100vh-minus-chrome guessing -- and grid-template-rows:1fr
+       auto hands the stats/calendar row all of it, leaving the footer link
+       (Add time manually) its natural size. */
     #page-overview.on{
       display:grid;
-      /* Plus the same safe-area insets .shell's padding now carries --
-         0 anywhere that doesn't apply, so this is exact either way. */
-      height:calc(100vh - 170px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;
       grid-template-columns:220px 1fr;
       grid-template-rows:1fr auto;
       grid-template-areas:"stats cal" "foot   foot";
@@ -739,7 +706,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.6</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.7</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -1452,9 +1419,13 @@ function showPage(name, skipFsGuard){
    the same approach buildFace() already uses for #digits between clock
    styles. Runs at load and whenever the breakpoint is crossed (a window
    resize or tablet rotation, not just a fresh page load). */
+/* Must stay identical to the CSS media query for the wide layout, so the
+   To-do card is relocated into the sidebar exactly when its tab is hidden --
+   a tablet in either orientation, never a phone. */
+var WIDE_QUERY = "(min-width:600px) and (min-height:600px)";
 function layoutTasksPanel(){
   var card = document.getElementById("taskcard");
-  var wide = window.matchMedia("(min-width:900px)").matches;
+  var wide = window.matchMedia(WIDE_QUERY).matches;
   var target = wide ? document.getElementById("taskslot") : document.getElementById("page-tasks");
   if(target && card && card.parentElement !== target) target.appendChild(card);
   renderTasks();
@@ -1462,7 +1433,7 @@ function layoutTasksPanel(){
   // an unreachable page if they were on it when the window widened.
   if(wide && page === "tasks") showPage("clock");
 }
-window.matchMedia("(min-width:900px)").addEventListener("change", layoutTasksPanel);
+window.matchMedia(WIDE_QUERY).addEventListener("change", layoutTasksPanel);
 
 /* ---------- chips ---------- */
 function renderChips(){
