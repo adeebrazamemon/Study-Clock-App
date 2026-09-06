@@ -191,7 +191,7 @@
      vertical room and pushed the buttons off the bottom edge. !important
      because #page-clock.on .face (an id selector in the wide layout) would
      otherwise outrank these plain two-class selectors. */
-  body.fs .face{width:min(80vw,58vh)!important;height:min(80vw,58vh)!important;margin:0}
+  body.fs .face{width:min(84vw,66vh)!important;height:min(84vw,66vh)!important;margin:0}
   /* Digits scale off both axes too, for the same reason. */
   body.fs .digits.inset{font-size:min(11vw,8vh)!important}
   body.fs .digits:not(.inset){font-size:min(4.6vw,3.4vh)!important}
@@ -692,7 +692,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 1.9</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.0</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -982,6 +982,10 @@ function taskName(id){ var t = getTask(id); return t ? t.text : null; }
 
 /* ---------- timer ---------- */
 var mode = "focus", running = false, remaining = 25*60, lastTick = 0;
+/* Seconds of the CURRENT focus block already banked into the day totals.
+   Lets commitElapsed() be idempotent (see there); rides along in the
+   live-timer snapshot so it survives a refresh. */
+var blockCommitted = 0;
 
 function modeSeconds(m){
   if(m === "focus") return state.settings.focus*60;
@@ -991,6 +995,7 @@ function modeSeconds(m){
 function setMode(m, autostart){
   mode = m;
   remaining = modeSeconds(m);
+  blockCommitted = 0;   // fresh block, nothing banked yet
   document.body.classList.toggle("rest", m !== "focus");
   running = !!autostart;
   lastTick = Date.now();
@@ -1019,32 +1024,60 @@ function toggle(){
 function resetBlock(){
   running = false;
   remaining = modeSeconds(mode);
+  blockCommitted = 0;
   state.completed = 0;
   save(true); nativeStop(); renderClock();
 }
 function endBlock(){
   if(mode === "focus" && !running && remaining >= modeSeconds(mode)) return;
+  // Flush the delta since the last tick (a running block hasn't ticked in up
+  // to 250ms) and bank the ACTUAL elapsed before ending -- so ending a block
+  // keeps the real time studied instead of throwing it away, and doesn't
+  // fake-credit the part of the block that was never spent.
+  if(running){
+    var d = (Date.now() - lastTick)/1000;
+    if(d > 0){ remaining -= d; if(remaining < 0) remaining = 0; }
+    lastTick = Date.now();
+  }
+  commitElapsed();
   remaining = 0;
+  running = false;
   blockFinished();
+}
+/* Bank however much of the current focus block has actually elapsed but
+   isn't in the totals yet. Idempotent: it works off (block length -
+   remaining), so it lands the same figure whether the time was ticked off
+   in the foreground, jumped after the tab was frozen/backgrounded, or
+   recomputed from the wall clock on reload -- and never double-counts,
+   because blockCommitted records what's already banked (and that figure is
+   persisted in the live snapshot, so it survives a refresh). This is what
+   makes a plain Pause -- or just leaving and coming back -- credit the time
+   with no need to press End block. */
+function commitElapsed(){
+  if(mode !== "focus") return;
+  var elapsed = modeSeconds(mode) - Math.max(0, remaining);
+  var add = elapsed - blockCommitted;
+  if(add <= 0) return;
+  var dk = key(new Date());
+  addSeconds(dk, state.activeCat, add);
+  if(state.activeTask) addTaskSeconds(dk, state.activeTask, add);
+  blockCommitted += add;
+  saveLiveTimer();
 }
 function tick(){
   var now = Date.now();
   var delta = (now - lastTick)/1000;
   lastTick = now;
   if(!running){ renderTod(); return; }
-  if(delta < 0 || delta > 3600) delta = 0;
-
-  if(mode === "focus"){
-    var used = Math.min(delta, remaining);
-    if(used > 0){
-      var dk = key(new Date());
-      addSeconds(dk, state.activeCat, used);
-      if(state.activeTask) addTaskSeconds(dk, state.activeTask, used);
-    }
-    save(false);
-  }
+  if(delta < 0) delta = 0;
+  // No upper clamp on delta: commitElapsed is bounded by the block length
+  // (remaining can't go below 0), so even a huge gap credits at most the
+  // rest of THIS block -- which is what genuinely elapsed -- never more.
   remaining -= delta;
-  if(remaining <= 0){ remaining = 0; blockFinished(); }
+  if(remaining < 0) remaining = 0;
+  commitElapsed();
+  save(false);
+  if(remaining <= 0){ blockFinished(); }
   renderClock();
 }
 function blockFinished(){
@@ -1121,6 +1154,7 @@ function saveLiveTimer(){
     localStorage.setItem(LIVE_KEY, JSON.stringify({
       mode: mode,
       running: running,
+      committed: blockCommitted,
       endTime: running ? Math.round(Date.now() + Math.max(0, remaining)*1000) : null,
       pausedRemainingMs: running ? 0 : Math.round(Math.max(0, remaining)*1000)
     }));
@@ -1140,6 +1174,7 @@ function restoreLiveTimer(){
     var s = JSON.parse(raw);
     if(!s || !s.mode) return;
     mode = s.mode;
+    blockCommitted = s.committed || 0;
     document.body.classList.toggle("rest", mode !== "focus");
     if(s.running && s.endTime){
       running = true;
@@ -1149,6 +1184,14 @@ function restoreLiveTimer(){
       remaining = Math.max(0, (s.pausedRemainingMs||0)/1000);
     }
     lastTick = Date.now();
+    // Bank whatever elapsed while the tab was gone/frozen. THIS is the fix
+    // for a long session's time vanishing: remaining gets recomputed from
+    // the wall clock on return, but nothing was ever crediting that elapsed
+    // time to the total -- commitElapsed now does, exactly once.
+    commitElapsed();
+    if(running && remaining <= 0){ blockFinished(); }
+    save(false);
+    renderClock();   // reflect the banked time + new remaining right away
   }catch(e){}
 }
 
@@ -1999,6 +2042,13 @@ function adoptNativeState(){
   try{ s = JSON.parse(raw); }catch(e){ return; }
   mode = s.label === "Short break" ? "shortBreak" : s.label === "Long break" ? "longBreak" : "focus";
   document.body.classList.toggle("rest", mode !== "focus");
+  // Recover how much of this block was already banked (the live snapshot is
+  // written for the app too), so commitElapsed below credits only the time
+  // that elapsed while the WebView wasn't around to tick -- no double count.
+  try{
+    var lv = JSON.parse(localStorage.getItem(LIVE_KEY) || "null");
+    blockCommitted = (lv && lv.mode === mode) ? (lv.committed || 0) : 0;
+  }catch(e){ blockCommitted = 0; }
   if(s.paused){
     running = false;
     remaining = Math.max(0, s.pausedRemaining/1000);
@@ -2008,6 +2058,8 @@ function adoptNativeState(){
   }
   lastTick = Date.now();
   nativeLive = true;
+  commitElapsed();
+  if(!s.paused && remaining <= 0){ blockFinished(); }
   renderClock(); renderModeButtons();
 }
 window.addEventListener("beforeunload", function(){ save(true); });
