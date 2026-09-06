@@ -475,11 +475,19 @@
        space is zero and it falls back to just the floor gaps. */
     #page-clock.on .clockwrap{
       height:100%;display:flex;flex-direction:column;
-      align-items:center;justify-content:space-evenly;gap:clamp(8px,1.6dvh,24px);
+      align-items:center;justify-content:center;gap:clamp(6px,1.4dvh,18px);
     }
     #page-clock.on .mode-row,#page-clock.on .clockdisplay,#page-clock.on .controls,
     #page-clock.on .goalwrap,#page-clock.on .cyclenote,#page-clock.on .clockextras{margin:0}
     #page-clock.on .goalwrap{width:100%;max-width:520px}
+    /* THE proper fit: the clock face absorbs whatever vertical space is left
+       after the fixed rows (mode buttons, controls, progress, note, extras),
+       shrinking to fit ANY device by construction -- no per-screen size
+       guessing. clockdisplay takes the leftover height; the face fills it as a
+       square capped by the available width. */
+    #page-clock.on .clockdisplay{flex:1 1 0;min-height:0;align-self:stretch;
+      display:grid;grid-template-rows:1fr auto auto;place-items:center;gap:4px}
+    #page-clock.on .face{height:100%;width:auto;aspect-ratio:1/1;max-width:100%;min-height:0;margin:0}
 
     #page-overview.on .stat{display:flex;flex-direction:column;justify-content:center;padding:14px 18px;overflow:hidden}
     #page-overview.on .stat .n{font-size:22px}
@@ -493,8 +501,7 @@
     .sidebar{display:flex;flex-direction:column;min-height:0}
     .sidebar > * + *{margin-top:18px}
     #taskslot{flex:1;min-height:0}
-    /* Face off the smaller axis so it never crowds the controls. */
-    #page-clock.on .face{width:clamp(160px,min(25vw,25dvh),440px);height:clamp(160px,min(25vw,25dvh),440px)}
+    /* Face sizing is the shared flex-fill (above) -- no fixed clamp here. */
 
     /* Overview: stats column beside a full-height calendar. */
     #page-overview.on{
@@ -538,9 +545,8 @@
        scrolls -- so the to-do bar never grows past this and never shrinks the
        clock above it. ~3*44px rows + ~24px header. */
     #page-clock.on .sidebar .tasklist{flex:none;height:156px;overflow-y:auto}
-    /* Smaller face on portrait tablet so the whole clock stack (down to the
-       Full screen / Analog row) fits without the panel needing to scroll. */
-    #page-clock.on .face{width:clamp(160px,min(30vw,21dvh),260px);height:clamp(160px,min(30vw,21dvh),260px)}
+    /* Face sizing is the shared flex-fill -- it shrinks to fit whatever the
+       stacked layout leaves, so the clock panel never needs to scroll. */
     /* The to-do bar is full width here, so split it into Today | Carried
        over columns (JS only fills the second when something carried over;
        .tasklist gets .split when both are shown -- see renderTasks). */
@@ -751,7 +757,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.5</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.6</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
