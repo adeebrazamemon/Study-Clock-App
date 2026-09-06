@@ -21,11 +21,29 @@ import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.credentials.ClearCredentialStateRequest;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.ClearCredentialException;
+import androidx.credentials.exceptions.GetCredentialException;
+
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
+
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView web;
     private boolean immersive = false;
+    /** Firebase "Web SDK configuration" OAuth client id. Credential Manager
+     *  needs the SERVER (web) client id; the page then exchanges the returned
+     *  Google ID token for a Firebase credential and syncs like the web app. */
+    private static final String WEB_CLIENT_ID =
+            "118951224761-jskq7sn8ekjqnis2u0aj6aiqecokdgm5.apps.googleusercontent.com";
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -175,7 +193,68 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** Hands the Google ID token (or a failure) back to the page on the UI
+     *  thread; the page finishes sign-in with Firebase signInWithCredential. */
+    private void finishSignIn(final String token) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (web == null) return;
+                if (token != null) {
+                    web.evaluateJavascript(
+                            "window.__googleToken && window.__googleToken('" + token + "')", null);
+                } else {
+                    web.evaluateJavascript(
+                            "window.__googleSignInFailed && window.__googleSignInFailed()", null);
+                }
+            }
+        });
+    }
+
     private class Bridge {
+
+        /** Native Google sign-in: the WebView can't run the OAuth popup the web
+         *  build uses, so fetch a Google ID token via Credential Manager and
+         *  pass it to the page (see finishSignIn). */
+        @JavascriptInterface
+        public void signInGoogle() {
+            GetGoogleIdOption opt = new GetGoogleIdOption.Builder()
+                    .setServerClientId(WEB_CLIENT_ID)
+                    .setFilterByAuthorizedAccounts(false)
+                    .build();
+            GetCredentialRequest req = new GetCredentialRequest.Builder()
+                    .addCredentialOption(opt)
+                    .build();
+            CredentialManager.create(MainActivity.this).getCredentialAsync(
+                    MainActivity.this, req, null, Executors.newSingleThreadExecutor(),
+                    new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                        @Override public void onResult(GetCredentialResponse result) {
+                            String token = null;
+                            try {
+                                if (result.getCredential() instanceof CustomCredential
+                                        && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                                            .equals(result.getCredential().getType())) {
+                                    token = GoogleIdTokenCredential.createFrom(
+                                            ((CustomCredential) result.getCredential()).getData())
+                                            .getIdToken();
+                                }
+                            } catch (Exception e) { token = null; }
+                            finishSignIn(token);
+                        }
+                        @Override public void onError(GetCredentialException e) {
+                            finishSignIn(null);
+                        }
+                    });
+        }
+
+        @JavascriptInterface
+        public void signOutGoogle() {
+            CredentialManager.create(MainActivity.this).clearCredentialStateAsync(
+                    new ClearCredentialStateRequest(), null, Executors.newSingleThreadExecutor(),
+                    new CredentialManagerCallback<Void, ClearCredentialException>() {
+                        @Override public void onResult(Void result) { }
+                        @Override public void onError(ClearCredentialException e) { }
+                    });
+        }
 
         /**
          * nextLabel and nextMs are one block of lookahead, so the service can roll
