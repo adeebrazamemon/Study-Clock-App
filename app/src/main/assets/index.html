@@ -708,7 +708,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.4</p>
+  <p class="hint" id="appversion" style="margin:14px 0 0">App version 2.5</p>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -846,12 +846,25 @@ var fbAuth = null, fbDb = null, syncUser = null, syncUnsub = null;
 /* True while a remote snapshot is being written into local state, so the
    save() it triggers doesn't turn around and push straight back out. */
 var applyingRemote = false;
+/* True from sign-in until the first cloud pull has been imported. Blocks any
+   local push in that window, so a second device can't overwrite your synced
+   settings/data with its own local defaults before it has pulled. */
+var pullPending = false;
 var pushTimer = null;
 
 /* Firestore's SDK throws on a literal `undefined` field value; round-tripping
    through JSON (same trick save() already uses for localStorage) strips
    those the same way it would before a plain JSON.stringify anyway. */
-function syncPayload(){ return JSON.parse(JSON.stringify(state)); }
+function syncPayload(){
+  var p = JSON.parse(JSON.stringify(state));
+  // The timer syncs ONLY when it isn't running: a live countdown belongs to
+  // the device running it (two would conflict), but a paused / reset / idle
+  // timer is a fixed value, so syncing it lets another device pick up from
+  // the same point instead of a fresh one. running -> null clears it.
+  p.timer = running ? null
+    : { mode:mode, remaining:Math.round(Math.max(0, remaining)), committed:blockCommitted };
+  return p;
+}
 
 function initSync(){
   if(!SYNC) return;
@@ -865,16 +878,20 @@ function initSync(){
     syncUser = user;
     renderSyncUI();
     if(syncUnsub){ syncUnsub(); syncUnsub = null; }
-    if(!user) return;
+    if(!user){ pullPending = false; return; }
 
+    // Import the cloud first; no local push is allowed until it lands.
+    pullPending = true;
     var ref = fbDb.collection("users").doc(user.uid);
     ref.get().then(function(snap){
       if(snap.exists){
+        // Existing account: the cloud copy wins -- adopt its settings & data.
         applyRemoteState(snap.data());
       }else{
-        // First device ever to sync this account: seed the cloud from here.
+        // First device ever to sign in to this account: seed the cloud here.
         ref.set(syncPayload()).catch(function(){});
       }
+      pullPending = false;
       syncUnsub = ref.onSnapshot(function(snap){
         // Ignore the local echo of our own pending write; only react once
         // a change has actually round-tripped through the server (i.e. it
@@ -882,7 +899,7 @@ function initSync(){
         if(snap.metadata.hasPendingWrites) return;
         if(snap.exists) applyRemoteState(snap.data());
       });
-    }).catch(function(){ note("Could not reach sync."); });
+    }).catch(function(){ pullPending = false; note("Could not reach sync."); });
   });
 }
 
@@ -897,13 +914,23 @@ function applyRemoteState(d){
   if("activeTask" in d) state.activeTask = d.activeTask;
   if(typeof d.completed === "number") state.completed = d.completed;
   if(d.activeCat) state.activeCat = d.activeCat;
+  // Adopt another device's paused/reset/idle timer, but never clobber a timer
+  // that's actively running here (local running always wins).
+  if(d.timer && !running){
+    mode = d.timer.mode || mode;
+    remaining = Math.max(0, +d.timer.remaining || 0);
+    blockCommitted = +d.timer.committed || 0;
+    document.body.classList.toggle("rest", mode !== "focus");
+    lastTick = Date.now();
+    saveLiveTimer();
+  }
   save(true);
   renderAll();
   applyingRemote = false;
 }
 
 function pushSync(){
-  if(!SYNC || !syncUser || applyingRemote) return;
+  if(!SYNC || !syncUser || applyingRemote || pullPending) return;
   if(pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(function(){
     fbDb.collection("users").doc(syncUser.uid).set(syncPayload()).catch(function(){});
@@ -1051,7 +1078,7 @@ function selectMode(m){
   blockCommitted = saved ? saved.committed : 0;
   running = false;
   lastTick = Date.now();
-  nativeSync();
+  nativeSync(); pushSync();   // sync the (paused) mode change to other devices
   renderClock(); renderModeButtons();
 }
 function toggle(){
