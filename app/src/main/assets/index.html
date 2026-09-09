@@ -19,11 +19,14 @@
     --rest:#43648F; --rest-soft:#DEE6EF; --warn:#9C4B2A;
     --heat-lo:220,234,229; --heat-hi:22,86,71;
     --radius:10px;
+    /* Accent used as *text*: blended toward --ink so it stays readable
+       against the surface no matter how dark or light the accent is. */
+    --focus-text:color-mix(in srgb, var(--focus) 60%, var(--ink));
   }
   .dark-tokens{}
   :root[data-theme="dark"]{
-    --bg:#0F1216; --surface:#191D23; --ink:#E6E9EE; --muted:#98A2AE;
-    --line:#2A2F38; --focus:#3E9C84; --focus-soft:#1A2A26;
+    --bg:#181C22; --surface:#232830; --ink:#E6E9EE; --muted:#98A2AE;
+    --line:#333B45; --focus:#3E9C84; --focus-soft:#1F3A33;
     --rest:#5E8AC0; --rest-soft:#182533; --warn:#C4703F;
     --heat-lo:26,44,39; --heat-hi:96,206,175;
   }
@@ -64,11 +67,6 @@
     :root:not([data-theme="light"])[data-accent="amber"]{ --focus:#E0A64B; --focus-soft:#2C2416; --rest:#5E8AC0; --rest-soft:#182533; }
   }
 
-  /* Dim dark tone -- a lighter charcoal for when true-dark feels too stark. */
-  :root[data-theme="dark"][data-darktone="dim"]{ --bg:#181C22; --surface:#232830; --line:#333B45; }
-  @media (prefers-color-scheme:dark){
-    :root:not([data-theme="light"])[data-darktone="dim"]{ --bg:#181C22; --surface:#232830; --line:#333B45; }
-  }
   /* Optional clock-face elements. */
   body.no-goal .goalwrap{display:none}
   body.no-cycle .cyclenote{display:none}
@@ -133,7 +131,7 @@
     background:none;border:1px solid var(--line);border-radius:999px;
     padding:7px 15px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
   }
-  .mode-row button[aria-pressed="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus);font-weight:600}
+  .mode-row button[aria-pressed="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus-text);font-weight:600}
 
   /* min(250px, 62vw): full size on anything roomy, but shrinks with the
      viewport on a narrow phone instead of crowding the card edges. */
@@ -172,7 +170,7 @@
   .todayline{color:var(--muted);font-size:13.5px;margin-top:3px}
   .controls{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
   button.primary{
-    background:var(--focus);color:#fff;border:1px solid var(--focus);border-radius:var(--radius);
+    background:var(--focus);color:var(--on-focus,#fff);border:1px solid var(--focus);border-radius:var(--radius);
     padding:11px 32px;font:inherit;font-weight:600;cursor:pointer;min-width:120px;
     box-shadow:0 2px 10px -2px color-mix(in srgb, var(--focus) 55%, transparent);
     transition:filter .15s,box-shadow .15s;
@@ -250,6 +248,9 @@
   }
   .chip .dot{width:9px;height:9px;border-radius:50%;background:var(--dot,#999)}
   .chip[aria-pressed="true"]{border-color:var(--ink);font-weight:600}
+  .chip-empty{border:1px dashed var(--line);background:none;border-radius:999px;
+    padding:7px 14px;font:inherit;font-size:13px;cursor:pointer;color:var(--muted)}
+  .chip-empty:hover{border-color:var(--focus);color:var(--focus-text)}
 
   /* ---------- stats ---------- */
   .statgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
@@ -265,10 +266,12 @@
   .dow span{text-align:center;font-size:12px;color:var(--muted)}
   .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
   .day{
+    position:relative;
     aspect-ratio:1/1;border:1px solid var(--line);border-radius:6px;background:var(--surface);
     display:flex;align-items:center;justify-content:center;
     padding:5px 6px;font:inherit;cursor:pointer;color:var(--ink);text-align:left;
   }
+  .day .crown{position:absolute;top:2px;right:3px;font-size:11px;line-height:1;pointer-events:none}
   .day.blank{border:none;background:none;cursor:default}
   .day .dn{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
   .day.filled .dn{color:rgba(255,255,255,.9);font-weight:600}
@@ -299,7 +302,7 @@
   }
   .taskadd input:focus{outline:none;border-color:var(--focus)}
   .taskadd button{
-    background:var(--focus);color:#fff;border:1px solid var(--focus);border-radius:var(--radius);
+    background:var(--focus);color:var(--on-focus,#fff);border:1px solid var(--focus);border-radius:var(--radius);
     padding:0 18px;font:inherit;font-weight:600;cursor:pointer;flex:none;
   }
   .tasklist{display:flex;flex-direction:column;gap:5px}
@@ -328,7 +331,7 @@
     background:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;
     font-size:13px;line-height:1;color:transparent;
   }
-  .task.done .tick{background:var(--focus);border-color:var(--focus);color:#fff}
+  .task.done .tick{background:var(--focus);border-color:var(--focus);color:var(--on-focus,#fff)}
   .tname{
     flex:1;min-width:0;background:none;border:none;font:inherit;text-align:left;color:var(--ink);
     cursor:pointer;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -339,6 +342,13 @@
   .tmeta .tt{font-variant-numeric:tabular-nums}
   .tdel{background:none;border:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px;flex:none}
   .tdel:hover{color:var(--warn)}
+  .tdrag{background:none;border:none;color:var(--muted);cursor:grab;padding:0 1px;flex:none;
+    font-size:13px;letter-spacing:-4px;line-height:1;opacity:.65;touch-action:none;
+    -webkit-user-select:none;user-select:none}
+  .tdrag:active{cursor:grabbing}
+  .task.dragging{opacity:.6}
+  .trename{flex:1;min-width:0;font:inherit;padding:3px 6px;border:1px solid var(--focus);
+    border-radius:6px;background:var(--surface);color:var(--ink)}
   .tasknote{color:var(--muted);font-size:13px;margin-top:11px}
 
   /* ---------- tabs ---------- */
@@ -352,7 +362,7 @@
     padding:9px 4px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
   }
   .tabs button .ic{font-size:17px;line-height:1}
-  .tabs button[aria-selected="true"]{color:var(--focus);font-weight:600}
+  .tabs button[aria-selected="true"]{color:var(--focus-text);font-weight:600}
 
   /* ---------- dialogs ---------- */
   dialog{
@@ -367,6 +377,36 @@
     font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);
   }
   .field input[type=number]{width:82px;text-align:right;font-variant-numeric:tabular-nums}
+  /* Manual-time-add: quick chips, side-by-side H/M, custom dd/mm/yy date. */
+  .field-col{margin-bottom:11px}
+  .field-col > label{display:block;font-size:14px;margin-bottom:8px}
+  .chiprow{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{background:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;
+    font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+  .chip:hover{border-color:var(--focus)}
+  .chip:active{background:var(--focus-soft);border-color:var(--focus)}
+  .hm-row{display:flex;gap:12px;margin-bottom:11px}
+  .hm-row .field{flex:1;margin-bottom:0}
+  .hm-row .field input[type=number]{width:72px}
+  /* Overview header: streak + days-until pills sitting side by side. */
+  .ovhead{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px}
+  .ovpill{display:flex;align-items:center;gap:9px;padding:11px 15px;border-radius:var(--radius);
+    border:1px solid var(--line);background:var(--surface);flex:1 1 210px;min-width:0}
+  .ovpill.accent{border-color:var(--focus);background:var(--focus-soft)}
+  .ovpill-ic{font-size:17px;line-height:1;flex:none}
+  .ovpill-ring{flex:none;display:inline-flex;line-height:0}
+  .ovpill-ring svg{transform:rotate(-90deg)}
+  .wr-track{fill:none;stroke:var(--line);stroke-width:3}
+  .wr-arc{fill:none;stroke:var(--focus);stroke-width:3;stroke-linecap:round;
+    stroke-dasharray:56.55;stroke-dashoffset:56.55;transition:stroke-dashoffset .3s}
+  .ovpill-main{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ovpill-sub{margin-left:auto;color:var(--muted);font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
+  .ovpill.accent .ovpill-sub{color:var(--focus-text)}
+  .datewrap{position:relative;display:inline-flex;align-items:center}
+  .datetext{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;
+    background:var(--surface);color:var(--ink);min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
+  .date-overlay{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer}
+  .cd-daterow{display:inline-flex;align-items:center;gap:10px}
   .swatches{display:flex;gap:10px}
   .swatch{
     width:28px;height:28px;border-radius:50%;border:2px solid transparent;
@@ -406,7 +446,7 @@
   .dtabs{display:flex;gap:6px;margin:-4px 0 16px}
   .dtabs button{flex:1;background:none;border:1px solid var(--line);border-radius:999px;
     padding:7px 10px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
-  .dtabs button[aria-selected="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus);font-weight:600}
+  .dtabs button[aria-selected="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus-text);font-weight:600}
   .dpane{display:none}
   .dpane.on{display:block}
 
@@ -506,10 +546,11 @@
 
     /* Overview: stats column beside a full-height calendar. */
     #page-overview.on{
-      display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr auto;
-      grid-template-areas:"stats cal" "foot foot";column-gap:24px;align-items:stretch;
+      display:grid;grid-template-columns:220px 1fr;grid-template-rows:auto 1fr auto;
+      grid-template-areas:"cd cd" "stats cal" "foot foot";column-gap:24px;align-items:stretch;
     }
-    #page-overview.on > .card:first-child{grid-area:stats;margin-top:0;min-height:0;display:flex;flex-direction:column}
+    #page-overview.on #ov-header{grid-area:cd;margin:0}
+    #page-overview.on > #statcard{grid-area:stats;margin-top:0;min-height:0;display:flex;flex-direction:column}
     #page-overview.on #calcard{grid-area:cal;margin-top:0}
     #page-overview.on .footer{grid-area:foot}
     #page-overview.on .statgrid{grid-template-columns:1fr;grid-template-rows:repeat(4,minmax(0,1fr));gap:10px;flex:1;min-height:0}
@@ -556,7 +597,8 @@
     }
 
     #page-overview.on{display:flex;flex-direction:column;gap:16px}
-    #page-overview.on > .card:first-child{flex:none;margin-top:0}
+    #page-overview.on #ov-header{margin:0}
+    #page-overview.on > #statcard{flex:none;margin-top:0}
     #page-overview.on .statgrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:1px}
     #page-overview.on #calcard{flex:1;min-height:0;margin-top:0;display:flex;flex-direction:column}
     #page-overview.on .footer{flex:none}
@@ -579,7 +621,28 @@
 
   <!-- ===== Overview ===== -->
   <div class="page on" id="page-overview">
-    <section class="card">
+    <div class="ovhead" id="ov-header" hidden>
+      <div class="ovpill" id="week-pill">
+        <span class="ovpill-ring" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22">
+            <circle class="wr-track" cx="12" cy="12" r="9"></circle>
+            <circle class="wr-arc" id="week-arc" cx="12" cy="12" r="9"></circle>
+          </svg>
+        </span>
+        <span class="ovpill-main">This week</span>
+        <span class="ovpill-sub" id="week-sub"></span>
+      </div>
+      <div class="ovpill" id="streak-pill" hidden>
+        <span class="ovpill-ic">🔥</span>
+        <span class="ovpill-main">Streak</span>
+        <span class="ovpill-sub" id="streak-days"></span>
+      </div>
+      <div class="ovpill accent" id="countdown-card" hidden>
+        <span class="ovpill-main">Days left</span>
+        <span class="ovpill-sub" id="cd-days"></span>
+      </div>
+    </div>
+    <section class="card" id="statcard">
       <h2>Where the hours went</h2>
       <div class="statgrid">
         <div class="stat"><div class="n" id="s-today">0h</div><div class="l">Today</div></div>
@@ -702,6 +765,16 @@
     <div class="field"><label for="in-long">Long break (minutes)</label><input type="number" id="in-long" min="1" max="120"></div>
     <div class="field"><label for="in-cycles">Focus sessions before a long break</label><input type="number" id="in-cycles" min="1" max="12"></div>
     <div class="field"><label for="in-goal">Daily target (hours)</label><input type="number" id="in-goal" min="1" max="16" step="0.5"></div>
+    <div class="field"><label for="in-weekdays">Study days per week</label><input type="number" id="in-weekdays" min="1" max="7"></div>
+    <div class="field"><label for="in-cd-date">Count down to a date</label>
+      <span class="cd-daterow">
+        <span class="datewrap">
+          <span class="datetext" id="cd-datetext">none</span>
+          <input type="date" id="in-cd-date" class="date-overlay">
+        </span>
+        <button type="button" class="linklike" id="cd-clear">Clear</button>
+      </span>
+    </div>
     <div class="field"><label for="in-auto">Start the next block automatically</label><input type="checkbox" id="in-auto"></div>
     <div class="field"><label for="in-sound">Chime when a block ends</label><input type="checkbox" id="in-sound"></div>
   </div>
@@ -713,12 +786,6 @@
         <option value="auto">Match device</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
-      </select>
-    </div>
-    <div class="field"><label for="in-darktone">Dark tone</label>
-      <select id="in-darktone">
-        <option value="default">Default</option>
-        <option value="dim">Dim (softer)</option>
       </select>
     </div>
     <div class="field"><label>Accent color</label>
@@ -756,7 +823,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.8</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.9</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -782,10 +849,25 @@
 <dialog id="dlg-manual">
   <h2>Add time manually</h2>
   <p class="hint">For sessions you did away from the timer.</p>
-  <div class="field"><label for="man-date">Date</label><input type="date" id="man-date"></div>
+  <div class="field"><label for="man-date">Date</label>
+    <span class="datewrap">
+      <span class="datetext" id="man-datetext">--</span>
+      <input type="date" id="man-date" class="date-overlay">
+    </span>
+  </div>
   <div class="field"><label for="man-cat">Category</label><select id="man-cat"></select></div>
-  <div class="field"><label for="man-h">Hours</label><input type="number" id="man-h" min="0" max="24" value="1"></div>
-  <div class="field"><label for="man-m">Minutes</label><input type="number" id="man-m" min="0" max="59" value="0"></div>
+  <div class="field-col"><label>Amount</label>
+    <div class="chiprow" id="man-chips">
+      <button type="button" class="chip" data-min="15">+15m</button>
+      <button type="button" class="chip" data-min="30">+30m</button>
+      <button type="button" class="chip" data-min="45">+45m</button>
+      <button type="button" class="chip" data-min="60">+1h</button>
+    </div>
+  </div>
+  <div class="hm-row">
+    <div class="field"><label for="man-h">Hours</label><input type="number" id="man-h" min="0" max="24" value="0" inputmode="numeric" onfocus="this.select()"></div>
+    <div class="field"><label for="man-m">Minutes</label><input type="number" id="man-m" min="0" max="59" value="0" inputmode="numeric" onfocus="this.select()"></div>
+  </div>
   <div class="dialog-actions">
     <button class="ghost" id="man-subtract">Subtract instead</button>
     <button class="ghost" id="man-cancel">Cancel</button>
@@ -827,12 +909,9 @@ var state = {
             style:"digital", theme:"auto",
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
-            showGoal:true, showCycle:true},
-  categories:[
-    {id:"c1",name:"MRCPI",color:PALETTE[0],archived:false},
-    {id:"c2",name:"Research",color:PALETTE[1],archived:false}
-  ],
-  activeCat:"c1",
+            showGoal:true, showCycle:true, countdownDate:"", weeklyDays:5},
+  categories:[],    // new users pick their own -- prompted before the first focus block
+  activeCat:null,
   days:{},          // "2026-09-04": { c1: seconds }
   taskTime:{},      // "2026-09-04": { taskId: seconds }  (a subset of days)
   tasks:[],         // {id, text, catId, done, doneDate}
@@ -1152,6 +1231,15 @@ function toggle(){
     lastTick = Date.now();
     save(true);
   }else{
+    // A focus block logs against the active category, so there has to be one.
+    // A brand-new user has none yet -- send them to add their first instead of
+    // silently starting a block whose time has nowhere to go.
+    if(mode === "focus" && !state.categories.filter(function(c){return !c.archived;}).length){
+      note("Add a category to study against.");
+      openCats();
+      var ni = document.getElementById("newcat"); if(ni) ni.focus();
+      return;
+    }
     running = true;
     lastTick = Date.now();
   }
@@ -1385,10 +1473,6 @@ function applyTheme(){
   btn.textContent = t === "dark" ? "\u25CF" : (t === "light" ? "\u25CB" : "\u25D1");
   btn.title = "Appearance: " + (t === "auto" ? "match device" : t);
 
-  // Dim dark tone (only bites in dark; harmless in light).
-  if(s.darkTone === "dim") root.setAttribute("data-darktone", "dim");
-  else root.removeAttribute("data-darktone");
-
   // Accent: a preset, or a custom colour (soft tint derived via color-mix so
   // it works in both light and dark). Clear any previous inline override first.
   // Accent is just a colour now (pick from the palette or "any colour"). One
@@ -1396,12 +1480,21 @@ function applyTheme(){
   root.removeAttribute("data-accent");
   root.style.removeProperty("--focus"); root.style.removeProperty("--focus-soft");
   root.style.removeProperty("--rest"); root.style.removeProperty("--rest-soft");
+  root.style.removeProperty("--on-focus");
   if(s.accentColor){
     var soft = "color-mix(in srgb, " + s.accentColor + " 15%, var(--surface))";
     root.style.setProperty("--focus", s.accentColor);
     root.style.setProperty("--focus-soft", soft);
     root.style.setProperty("--rest", s.accentColor);
     root.style.setProperty("--rest-soft", soft);
+    // Text sitting *on* the accent fill (button labels, ticks): pick black or
+    // white by the accent's perceived brightness so a light accent doesn't
+    // leave white text unreadable.
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(s.accentColor);
+    if(m){
+      var lum = 0.299*parseInt(m[1],16) + 0.587*parseInt(m[2],16) + 0.114*parseInt(m[3],16);
+      root.style.setProperty("--on-focus", lum > 150 ? "#16211F" : "#fff");
+    }
   }
 
   // Optional clock-face elements.
@@ -1639,7 +1732,20 @@ window.matchMedia(WIDE_QUERY).addEventListener("change", layoutTasksPanel);
 function renderChips(){
   var wrap = document.getElementById("chips");
   wrap.innerHTML = "";
-  state.categories.filter(function(c){return !c.archived;}).forEach(function(c){
+  var live = state.categories.filter(function(c){return !c.archived;});
+  if(!live.length){
+    var hint = document.createElement("button");
+    hint.type = "button";
+    hint.className = "chip-empty";
+    hint.textContent = "+ Add your first category";
+    hint.addEventListener("click", function(){
+      openCats();
+      var ni = document.getElementById("newcat"); if(ni) ni.focus();
+    });
+    wrap.appendChild(hint);
+    return;
+  }
+  live.forEach(function(c){
     var b = document.createElement("button");
     b.className = "chip";
     b.setAttribute("aria-pressed", c.id === state.activeCat);
@@ -1666,6 +1772,7 @@ function buildTaskRow(t){
   var row = document.createElement("div");
   row.className = "task" + (t.done ? " done" : "") +
                   (t.id === state.activeTask && !t.done ? " active" : "");
+  row.setAttribute("data-tid", t.id);
 
   var tick2 = document.createElement("button");
   tick2.className = "tick";
@@ -1691,10 +1798,35 @@ function buildTaskRow(t){
     if(state.activeTask) state.activeCat = t.catId;
     save(true); renderTasks(); renderTaskChips(); renderChips(); nativeSync();
   });
+  // Rename in place: long-press (touch) or double-click (desktop). A short tap
+  // still just logs time; the long-press fires before any click is counted.
+  if(!t.done){
+    var lpTimer = null;
+    name.addEventListener("pointerdown", function(){
+      lpTimer = setTimeout(function(){ lpTimer = null; startRename(row, name, t); }, 500);
+    });
+    var cancelLP = function(){ if(lpTimer){ clearTimeout(lpTimer); lpTimer = null; } };
+    name.addEventListener("pointerup", cancelLP);
+    name.addEventListener("pointermove", cancelLP);
+    name.addEventListener("pointercancel", cancelLP);
+    name.addEventListener("dblclick", function(e){ e.preventDefault(); startRename(row, name, t); });
+  }
 
   // The whole row is colour-coded by category now (see .task CSS), so no dot.
   row.style.setProperty("--tcat", catColor(t.catId));
   row.title = catName(t.catId);
+
+  // Drag handle to reorder (open tasks only). Pointer Events so it works the
+  // same on touch and mouse.
+  var grip = null;
+  if(!t.done){
+    grip = document.createElement("button");
+    grip.className = "tdrag";
+    grip.type = "button";
+    grip.innerHTML = "&#8942;&#8942;";
+    grip.setAttribute("aria-label", "Drag to reorder");
+    grip.addEventListener("pointerdown", function(e){ startDrag(e, row); });
+  }
 
   var del = document.createElement("button");
   del.className = "tdel";
@@ -1715,10 +1847,68 @@ function buildTaskRow(t){
     }
   });
 
+  if(grip) row.appendChild(grip);
   row.appendChild(tick2); row.appendChild(name);
   row.appendChild(del);
   return row;
 }
+// Swap a task's name button for an input, editing in place.
+function startRename(row, nameEl, t){
+  if(t.done || !nameEl.parentNode) return;
+  var input = document.createElement("input");
+  input.className = "trename"; input.type = "text"; input.value = t.text; input.maxLength = 80;
+  row.replaceChild(input, nameEl);
+  input.focus(); input.select();
+  var settled = false;
+  function commit(keep){
+    if(settled) return; settled = true;
+    if(keep){ var v = input.value.trim(); if(v) t.text = v; }
+    save(true); renderTasks(); renderTaskChips(); nativeSync();
+  }
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); commit(true); }
+    else if(e.key === "Escape"){ commit(false); }
+  });
+  input.addEventListener("blur", function(){ commit(true); });
+}
+
+// Drag-to-reorder open tasks. On drop, rebuild state.tasks to match the DOM
+// order (done/carried rows keep their rendered order; anything not shown is
+// appended unchanged).
+function startDrag(e, row){
+  if(row.classList.contains("done")) return;
+  e.preventDefault();
+  row.classList.add("dragging");
+  function onMove(ev){
+    var col = row.parentNode; if(!col) return;
+    row.style.pointerEvents = "none";
+    var under = document.elementFromPoint(ev.clientX, ev.clientY);
+    row.style.pointerEvents = "";
+    if(!under) return;
+    var target = under.closest ? under.closest(".task") : null;
+    if(!target || target === row || target.parentNode !== col || target.classList.contains("done")) return;
+    var r = target.getBoundingClientRect();
+    col.insertBefore(row, (ev.clientY < r.top + r.height/2) ? target : target.nextSibling);
+  }
+  function onUp(){
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    row.classList.remove("dragging");
+    var order = [];
+    document.querySelectorAll("#tasklist .task").forEach(function(el){
+      var id = el.getAttribute("data-tid"); if(id) order.push(id);
+    });
+    var byId = {}; state.tasks.forEach(function(x){ byId[x.id] = x; });
+    var seen = {}, next = [];
+    order.forEach(function(id){ if(byId[id]){ next.push(byId[id]); seen[id] = 1; } });
+    state.tasks.forEach(function(x){ if(!seen[x.id]) next.push(x); });
+    state.tasks = next;
+    save(true); nativeSync(); renderTasks();
+  }
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+}
+
 function renderTasks(){
   var wrap = document.getElementById("tasklist");
   var note2 = document.getElementById("tasknote");
@@ -1822,6 +2012,13 @@ function renderCalendar(){
   var todayKey = key(new Date());
   var goal = state.settings.goal*3600;
 
+  // The month's best day gets a crown -- only when something's actually logged.
+  var crownK = null, crownS = 0;
+  for(var ci=1; ci<=dim; ci++){
+    var ck = viewY+"-"+pad(viewM+1)+"-"+pad(ci), cs = daySeconds(ck);
+    if(cs > crownS){ crownS = cs; crownK = ck; }
+  }
+
   for(var i=0;i<lead;i++){
     var blank = document.createElement("div");
     blank.className = "day blank";
@@ -1842,8 +2039,9 @@ function renderCalendar(){
       // No hour label in the cell itself -- the heat color already shows
       // how much at a glance, and the exact number appears in the
       // breakdown panel (via aria-label too) as soon as the day is tapped.
-      b.innerHTML = '<span class="dn">'+dnum+'</span>';
-      b.setAttribute("aria-label", k + ", " + fmtHM(s));
+      b.innerHTML = '<span class="dn">'+dnum+'</span>' +
+        (k===crownK ? '<span class="crown" title="Most this month">👑</span>' : '');
+      b.setAttribute("aria-label", k + ", " + fmtHM(s) + (k===crownK ? ", best day this month" : ""));
       b.addEventListener("click", function(){
         // Always select (never toggle back off) -- clicking the same day
         // twice used to deselect it back to the month view, which read as
@@ -1882,16 +2080,20 @@ function renderBreakdown(){
     }
   }
 
+  // Only categories with at least a full minute logged -- a few stray
+  // seconds from a quickly-reset timer shouldn't surface as a "0h 0m" row.
+  var ids = Object.keys(totals).filter(function(c){return totals[c] >= 60;})
+    .sort(function(a,b){return totals[b]-totals[a];});
+  grand = ids.reduce(function(sum,c){return sum + totals[c];}, 0);
+
   body.innerHTML = "";
-  if(!grand){
+  if(!ids.length){
     var p = document.createElement("p");
     p.className = "empty";
     p.textContent = selectedDay ? "Nothing logged this day." : "Nothing logged this month yet.";
     body.appendChild(p);
     return;
   }
-
-  var ids = Object.keys(totals).sort(function(a,b){return totals[b]-totals[a];});
 
   // One bar for the whole total, segmented by each category's share of
   // it -- always reads as "full" and shows real proportions at a glance,
@@ -1935,13 +2137,62 @@ function renderBreakdown(){
 function renderAll(){
   applyTheme();
   renderClock(); renderModeButtons(); renderChips(); renderTaskChips(); renderTasks();
-  renderStats(); renderCalendar(); renderBreakdown();
+  renderStats(); renderCalendar(); renderBreakdown(); renderOverviewHeader();
+}
+
+// Consecutive days with something logged, ending today (or yesterday if today
+// isn't logged yet, so the streak doesn't read 0 first thing in the morning).
+function currentStreak(){
+  var d = new Date(); d.setHours(0,0,0,0);
+  if(daySeconds(key(d)) === 0) d.setDate(d.getDate()-1);
+  var n = 0;
+  while(daySeconds(key(d)) > 0){ n++; d.setDate(d.getDate()-1); }
+  return n;
+}
+function renderStreak(){
+  var n = currentStreak();
+  var pill = document.getElementById("streak-pill");
+  if(n < 1){ pill.hidden = true; return; }
+  document.getElementById("streak-days").textContent = n === 1 ? "1 day" : n + " days";
+  pill.hidden = false;
+}
+// This week's total against (daily goal x study-days-per-week), drawn as a ring.
+function renderWeekPill(){
+  var today = new Date();
+  var ws = new Date(today); ws.setDate(today.getDate()-mondayIndex(today)); ws.setHours(0,0,0,0);
+  var wk = 0;
+  for(var k in state.days){ var d = parseKey(k); if(d >= ws && d <= today) wk += daySeconds(k); }
+  var target = state.settings.goal*3600 * (state.settings.weeklyDays || 5);
+  var frac = target > 0 ? Math.min(1, wk/target) : 0;
+  var circ = 2*Math.PI*9;
+  document.getElementById("week-arc").style.strokeDashoffset = circ*(1-frac);
+  document.getElementById("week-sub").textContent = fmtShort(wk) + " / " + fmtShort(target);
+}
+function renderOverviewHeader(){
+  renderWeekPill(); renderStreak(); renderCountdown();
+  document.getElementById("ov-header").hidden =
+    document.getElementById("week-pill").hidden &&
+    document.getElementById("streak-pill").hidden &&
+    document.getElementById("countdown-card").hidden;
+}
+
+// Days-until banner: shown only when a label and a not-yet-past date are set.
+function renderCountdown(){
+  var card = document.getElementById("countdown-card");
+  var date = state.settings.countdownDate;
+  if(!date){ card.hidden = true; return; }
+  var today = new Date(); today.setHours(0,0,0,0);
+  var p = date.split("-");
+  var days = Math.round((new Date(+p[0], +p[1]-1, +p[2]) - today) / 86400000);
+  if(days < 0){ card.hidden = true; return; }
+  document.getElementById("cd-days").textContent = days === 0 ? "Today" : days;
+  card.hidden = false;
 }
 
 /* ---------- dialogs ---------- */
 var dlgSettings = document.getElementById("dlg-settings");
 var APPEARANCE = {"in-theme":"theme","in-style":"style","in-analog":"analogStyle",
-                  "in-digit":"digitStyle","in-darktone":"darkTone"};
+                  "in-digit":"digitStyle"};
 
 // Load every Settings input from state.settings. Also called when synced data
 // arrives while the dialog is open (you sign in from its Sync tab), so the
@@ -1953,6 +2204,7 @@ function fillSettingsInputs(){
   document.getElementById("in-long").value = state.settings.longBreak;
   document.getElementById("in-cycles").value = state.settings.cycles;
   document.getElementById("in-goal").value = state.settings.goal;
+  document.getElementById("in-weekdays").value = state.settings.weeklyDays || 5;
   document.getElementById("in-auto").checked = state.settings.auto;
   document.getElementById("in-sound").checked = state.settings.sound;
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
@@ -1961,6 +2213,8 @@ function fillSettingsInputs(){
   document.getElementById("in-showgoal").checked = state.settings.showGoal !== false;
   document.getElementById("in-showcycle").checked = state.settings.showCycle !== false;
   document.getElementById("in-accent-custom").value = state.settings.accentColor || "#1F6F5C";
+  document.getElementById("in-cd-date").value = state.settings.countdownDate || "";
+  document.getElementById("cd-datetext").textContent = state.settings.countdownDate ? fmtDMY(state.settings.countdownDate) : "none";
   syncAccentSwatches();
 }
 document.getElementById("open-settings").addEventListener("click", function(){
@@ -2038,8 +2292,10 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.longBreak  = Math.round(num("in-long",1,120,state.settings.longBreak));
   state.settings.cycles     = Math.round(num("in-cycles",1,12,state.settings.cycles));
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
+  state.settings.weeklyDays = Math.round(num("in-weekdays",1,7,state.settings.weeklyDays||5));
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
+  state.settings.countdownDate = document.getElementById("in-cd-date").value;
   if(wasFresh) remaining = modeSeconds(mode);
   save(true); dlgSettings.close(); renderAll();
 });
@@ -2130,6 +2386,8 @@ confirmCancelBtn.addEventListener("click", function(){
 dlgConfirm.addEventListener("cancel", function(){ pendingConfirmYes = null; });
 
 var dlgManual = document.getElementById("dlg-manual");
+// "2026-09-09" -> "09/09/26" for the custom date display.
+function fmtDMY(iso){ if(!iso) return "--"; var p = iso.split("-"); return p[2] + "/" + p[1] + "/" + p[0].slice(2); }
 document.getElementById("open-manual").addEventListener("click", function(){
   var sel = document.getElementById("man-cat");
   sel.innerHTML = "";
@@ -2139,8 +2397,30 @@ document.getElementById("open-manual").addEventListener("click", function(){
     if(c.id === state.activeCat) o.selected = true;
     sel.appendChild(o);
   });
-  document.getElementById("man-date").value = selectedDay || key(new Date());
+  var md = document.getElementById("man-date");
+  md.value = selectedDay || key(new Date());
+  document.getElementById("man-datetext").textContent = fmtDMY(md.value);
+  document.getElementById("man-h").value = 0;
+  document.getElementById("man-m").value = 0;
   dlgManual.showModal();
+});
+document.getElementById("man-date").addEventListener("change", function(){
+  document.getElementById("man-datetext").textContent = fmtDMY(this.value);
+});
+document.getElementById("in-cd-date").addEventListener("change", function(){
+  document.getElementById("cd-datetext").textContent = this.value ? fmtDMY(this.value) : "none";
+});
+document.getElementById("cd-clear").addEventListener("click", function(){
+  document.getElementById("in-cd-date").value = "";
+  document.getElementById("cd-datetext").textContent = "none";
+});
+// Quick chips tally up into the Hours/Minutes fields (capped at 24h).
+document.getElementById("man-chips").addEventListener("click", function(e){
+  var b = e.target.closest(".chip"); if(!b) return;
+  var mh = document.getElementById("man-h"), mm = document.getElementById("man-m");
+  var total = (parseInt(mh.value,10)||0)*60 + (parseInt(mm.value,10)||0);
+  total = Math.min(total + parseInt(b.getAttribute("data-min"),10), 24*60);
+  mh.value = Math.floor(total/60); mm.value = total%60;
 });
 document.getElementById("man-cancel").addEventListener("click", function(){ dlgManual.close(); });
 function manualApply(sign){
