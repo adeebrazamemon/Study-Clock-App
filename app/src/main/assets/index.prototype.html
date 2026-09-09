@@ -258,6 +258,10 @@
   .stat{background:var(--surface);padding:13px 14px}
   .stat .n{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .stat .l{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .stat .trend{font-size:11px;margin-top:4px;font-weight:600;line-height:1.3}
+  .stat .trend.up{color:var(--focus)}
+  .stat .trend.down{color:var(--warn)}
+  .stat .trend.flat{color:var(--muted);font-weight:500}
 
   /* ---------- calendar ---------- */
   .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -279,7 +283,9 @@
   .day[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink) inset}
 
   .breakdown{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
-  .breakdown h3{font-size:14px;font-weight:600;margin:0 0 10px}
+  .bd-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
+  .breakdown h3{font-size:14px;font-weight:600;margin:0}
+  #bd-edit{flex:none}
   /* One bar for the whole total, segmented by each category's share --
      same visual language as .goalbar on the Clock page -- rather than a
      separate mostly-empty bar per category or task. */
@@ -400,6 +406,12 @@
     background:var(--surface);color:var(--ink);min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
   .date-overlay{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer}
   .cd-daterow{display:inline-flex;align-items:center;gap:10px}
+  .dayrow{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .dayrow .dot{width:11px;height:11px;border-radius:50%;flex:none}
+  .dayrow .nm{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dayrow input[type=number]{width:52px;text-align:right;font:inherit;padding:6px 8px;
+    border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-variant-numeric:tabular-nums}
+  .dayrow .unit{color:var(--muted);font-size:12.5px}
   .swatches{display:flex;gap:10px}
   .swatch{
     width:28px;height:28px;border-radius:50%;border:2px solid transparent;
@@ -629,7 +641,7 @@
       <h2>Where the hours went</h2>
       <div class="statgrid">
         <div class="stat"><div class="n" id="s-today">0h</div><div class="l">Today</div></div>
-        <div class="stat"><div class="n" id="s-week">0h</div><div class="l">This week</div></div>
+        <div class="stat"><div class="n" id="s-week">0h</div><div class="l">This week</div><div class="trend" id="s-week-trend"></div></div>
         <div class="stat"><div class="n" id="s-month">0h</div><div class="l">This month</div></div>
         <div class="stat"><div class="n" id="s-days">0</div><div class="l">Days studied</div></div>
       </div>
@@ -644,7 +656,10 @@
       <div class="dow"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
       <div class="grid" id="grid"></div>
       <div class="breakdown">
-        <h3 id="bdtitle">September 2026</h3>
+        <div class="bd-head">
+          <h3 id="bdtitle">September 2026</h3>
+          <button type="button" class="linklike" id="bd-edit" hidden>Edit day</button>
+        </div>
         <div id="bdbody"></div>
       </div>
     </section>
@@ -805,7 +820,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 3.9</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.0</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -854,6 +869,17 @@
     <button class="ghost" id="man-subtract">Subtract instead</button>
     <button class="ghost" id="man-cancel">Cancel</button>
     <button class="primary" id="man-add">Add time</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-day">
+  <h2 id="day-title">Edit day</h2>
+  <p class="hint">Set the exact time logged for each category on this day.</p>
+  <div id="day-rows"></div>
+  <div class="dialog-actions">
+    <button class="ghost" id="day-clear">Clear day</button>
+    <button class="ghost" id="day-cancel">Cancel</button>
+    <button class="primary" id="day-save">Save</button>
   </div>
 </dialog>
 
@@ -1518,14 +1544,14 @@ function buildFace(style){
       }
     }
     svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
-    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="rotate(-90 110 110)"></circle>';
+    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="translate(220 0) scale(-1 1) rotate(-90 110 110)"></circle>';
     svg += '<line class="hand" id="hand" x1="110" y1="110" x2="110" y2="30"/>';
     svg += '<circle class="hub" cx="110" cy="110" r="5"/>';
     svg += '</svg>';
     face.innerHTML = svg;
   }else{
     svg += '<circle class="ring-track" cx="110" cy="110" r="100"></circle>';
-    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="rotate(-90 110 110)"></circle>';
+    svg += '<circle class="ring-arc" id="arc" cx="110" cy="110" r="100" transform="translate(220 0) scale(-1 1) rotate(-90 110 110)"></circle>';
     svg += '</svg>';
     face.innerHTML = svg;
     face.appendChild(digits); // centered inside the ring
@@ -1570,7 +1596,7 @@ function renderClock(){
   }
   var hand = document.getElementById("hand");
   if(hand){
-    var ang = used*Math.PI*2 - Math.PI/2;
+    var ang = -used*Math.PI*2 - Math.PI/2;
     hand.setAttribute("x2", (110+Math.cos(ang)*78).toFixed(1));
     hand.setAttribute("y2", (110+Math.sin(ang)*78).toFixed(1));
   }
@@ -1963,16 +1989,31 @@ function renderStats(){
   var today = new Date();
   var weekStart = new Date(today); weekStart.setDate(today.getDate()-mondayIndex(today));
   weekStart.setHours(0,0,0,0);
-  var wk = 0, mo = 0, days = 0;
+  var lastWeekStart = new Date(weekStart); lastWeekStart.setDate(weekStart.getDate()-7);
+  var wk = 0, lw = 0, mo = 0, days = 0;
   for(var k in state.days){
     var s = daySeconds(k), d = parseKey(k);
     if(d >= weekStart && d <= today) wk += s;
+    else if(d >= lastWeekStart && d < weekStart) lw += s;
     if(d.getFullYear()===viewY && d.getMonth()===viewM){ mo += s; if(s>0) days++; }
   }
   document.getElementById("s-today").textContent = fmtShort(daySeconds(key(today)));
   document.getElementById("s-week").textContent = fmtShort(wk);
   document.getElementById("s-month").textContent = fmtShort(mo);
   document.getElementById("s-days").textContent = days;
+
+  // How this week compares to the same stretch last week.
+  var tEl = document.getElementById("s-week-trend");
+  var diff = wk - lw;
+  if(lw === 0 && wk === 0){
+    tEl.textContent = ""; tEl.className = "trend";
+  }else if(Math.abs(diff) < 60){
+    tEl.textContent = "Same as last week"; tEl.className = "trend flat";
+  }else{
+    var up = diff > 0;
+    tEl.textContent = (up ? "▲ +" : "▼ −") + fmtShort(Math.abs(diff)) + " vs last week";
+    tEl.className = "trend " + (up ? "up" : "down");
+  }
 }
 
 function shade(f){
@@ -2045,6 +2086,7 @@ function escapeHtml(s){
 function renderBreakdown(){
   var title = document.getElementById("bdtitle");
   var body = document.getElementById("bdbody");
+  document.getElementById("bd-edit").hidden = !selectedDay;
   var totals = {}, grand = 0, id;
 
   if(selectedDay){
@@ -2402,6 +2444,66 @@ function manualApply(sign){
 }
 document.getElementById("man-add").addEventListener("click", function(){ manualApply(1); });
 document.getElementById("man-subtract").addEventListener("click", function(){ manualApply(-1); });
+
+// ----- edit a single day straight from the calendar -----
+var dlgDay = document.getElementById("dlg-day");
+var dayEditKey = null;
+function setDaySeconds(k, catId, secs){
+  if(secs > 0){
+    if(!state.days[k]) state.days[k] = {};
+    state.days[k][catId] = secs;
+  }else if(state.days[k]){
+    delete state.days[k][catId];
+  }
+  if(state.days[k] && !Object.keys(state.days[k]).length) delete state.days[k];
+}
+function openDayEditor(k){
+  if(!k) return;
+  dayEditKey = k;
+  document.getElementById("day-title").textContent = parseKey(k).toLocaleDateString(undefined,
+    {weekday:"long", day:"numeric", month:"long", year:"numeric"});
+  var rows = document.getElementById("day-rows");
+  rows.innerHTML = "";
+  var rec = state.days[k] || {};
+  state.categories.filter(function(c){return !c.archived;}).forEach(function(c){
+    var cur = rec[c.id] || 0;
+    var h = Math.floor(cur/3600), m = Math.round((cur%3600)/60);
+    if(m === 60){ h++; m = 0; }
+    var row = document.createElement("div");
+    row.className = "dayrow";
+    row.setAttribute("data-cid", c.id);
+    row.innerHTML =
+      '<span class="dot" style="background:'+catColor(c.id)+'"></span>' +
+      '<span class="nm">'+escapeHtml(c.name)+'</span>' +
+      '<input type="number" class="d-h" min="0" max="24" inputmode="numeric" onfocus="this.select()" value="'+h+'"><span class="unit">h</span>' +
+      '<input type="number" class="d-m" min="0" max="59" inputmode="numeric" onfocus="this.select()" value="'+m+'"><span class="unit">m</span>';
+    rows.appendChild(row);
+  });
+  dlgDay.showModal();
+}
+document.getElementById("bd-edit").addEventListener("click", function(){ openDayEditor(selectedDay); });
+document.getElementById("day-cancel").addEventListener("click", function(){ dlgDay.close(); });
+document.getElementById("day-save").addEventListener("click", function(){
+  if(!dayEditKey) return;
+  Array.prototype.forEach.call(document.querySelectorAll("#day-rows .dayrow"), function(row){
+    var cid = row.getAttribute("data-cid");
+    var h = Math.min(24, Math.max(0, parseInt(row.querySelector(".d-h").value,10)||0));
+    var m = Math.min(59, Math.max(0, parseInt(row.querySelector(".d-m").value,10)||0));
+    setDaySeconds(dayEditKey, cid, h*3600 + m*60);
+  });
+  save(true); dlgDay.close(); renderAll(); nativeSync();
+  note("Day updated.");
+});
+document.getElementById("day-clear").addEventListener("click", function(){
+  if(!dayEditKey) return;
+  var k = dayEditKey;
+  confirmDialog("Clear all logged time for this day?", function(){
+    delete state.days[k];
+    if(state.taskTime) delete state.taskTime[k];
+    save(true); dlgDay.close(); renderAll(); nativeSync();
+    note("Day cleared.");
+  });
+});
 
 /* ---------- wiring ---------- */
 document.getElementById("startstop").addEventListener("click", toggle);
