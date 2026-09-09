@@ -392,16 +392,9 @@
   .ovhead{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px}
   .ovpill{display:flex;align-items:center;gap:9px;padding:11px 15px;border-radius:var(--radius);
     border:1px solid var(--line);background:var(--surface);flex:1 1 210px;min-width:0}
-  .ovpill.accent{border-color:var(--focus);background:var(--focus-soft)}
   .ovpill-ic{font-size:17px;line-height:1;flex:none}
-  .ovpill-ring{flex:none;display:inline-flex;line-height:0}
-  .ovpill-ring svg{transform:rotate(-90deg)}
-  .wr-track{fill:none;stroke:var(--line);stroke-width:3}
-  .wr-arc{fill:none;stroke:var(--focus);stroke-width:3;stroke-linecap:round;
-    stroke-dasharray:56.55;stroke-dashoffset:56.55;transition:stroke-dashoffset .3s}
   .ovpill-main{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ovpill-sub{margin-left:auto;color:var(--muted);font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
-  .ovpill.accent .ovpill-sub{color:var(--focus-text)}
   .datewrap{position:relative;display:inline-flex;align-items:center}
   .datetext{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;
     background:var(--surface);color:var(--ink);min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
@@ -622,22 +615,12 @@
   <!-- ===== Overview ===== -->
   <div class="page on" id="page-overview">
     <div class="ovhead" id="ov-header" hidden>
-      <div class="ovpill" id="week-pill">
-        <span class="ovpill-ring" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22">
-            <circle class="wr-track" cx="12" cy="12" r="9"></circle>
-            <circle class="wr-arc" id="week-arc" cx="12" cy="12" r="9"></circle>
-          </svg>
-        </span>
-        <span class="ovpill-main">This week</span>
-        <span class="ovpill-sub" id="week-sub"></span>
-      </div>
       <div class="ovpill" id="streak-pill" hidden>
         <span class="ovpill-ic">🔥</span>
         <span class="ovpill-main">Streak</span>
         <span class="ovpill-sub" id="streak-days"></span>
       </div>
-      <div class="ovpill accent" id="countdown-card" hidden>
+      <div class="ovpill" id="countdown-card" hidden>
         <span class="ovpill-main">Days left</span>
         <span class="ovpill-sub" id="cd-days"></span>
       </div>
@@ -765,7 +748,6 @@
     <div class="field"><label for="in-long">Long break (minutes)</label><input type="number" id="in-long" min="1" max="120"></div>
     <div class="field"><label for="in-cycles">Focus sessions before a long break</label><input type="number" id="in-cycles" min="1" max="12"></div>
     <div class="field"><label for="in-goal">Daily target (hours)</label><input type="number" id="in-goal" min="1" max="16" step="0.5"></div>
-    <div class="field"><label for="in-weekdays">Study days per week</label><input type="number" id="in-weekdays" min="1" max="7"></div>
     <div class="field"><label for="in-cd-date">Count down to a date</label>
       <span class="cd-daterow">
         <span class="datewrap">
@@ -909,7 +891,7 @@ var state = {
             style:"digital", theme:"auto",
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
-            showGoal:true, showCycle:true, countdownDate:"", weeklyDays:5},
+            showGoal:true, showCycle:true, countdownDate:""},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
   days:{},          // "2026-09-04": { c1: seconds }
@@ -2156,22 +2138,9 @@ function renderStreak(){
   document.getElementById("streak-days").textContent = n === 1 ? "1 day" : n + " days";
   pill.hidden = false;
 }
-// This week's total against (daily goal x study-days-per-week), drawn as a ring.
-function renderWeekPill(){
-  var today = new Date();
-  var ws = new Date(today); ws.setDate(today.getDate()-mondayIndex(today)); ws.setHours(0,0,0,0);
-  var wk = 0;
-  for(var k in state.days){ var d = parseKey(k); if(d >= ws && d <= today) wk += daySeconds(k); }
-  var target = state.settings.goal*3600 * (state.settings.weeklyDays || 5);
-  var frac = target > 0 ? Math.min(1, wk/target) : 0;
-  var circ = 2*Math.PI*9;
-  document.getElementById("week-arc").style.strokeDashoffset = circ*(1-frac);
-  document.getElementById("week-sub").textContent = fmtShort(wk) + " / " + fmtShort(target);
-}
 function renderOverviewHeader(){
-  renderWeekPill(); renderStreak(); renderCountdown();
+  renderStreak(); renderCountdown();
   document.getElementById("ov-header").hidden =
-    document.getElementById("week-pill").hidden &&
     document.getElementById("streak-pill").hidden &&
     document.getElementById("countdown-card").hidden;
 }
@@ -2204,7 +2173,6 @@ function fillSettingsInputs(){
   document.getElementById("in-long").value = state.settings.longBreak;
   document.getElementById("in-cycles").value = state.settings.cycles;
   document.getElementById("in-goal").value = state.settings.goal;
-  document.getElementById("in-weekdays").value = state.settings.weeklyDays || 5;
   document.getElementById("in-auto").checked = state.settings.auto;
   document.getElementById("in-sound").checked = state.settings.sound;
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
@@ -2292,7 +2260,6 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.longBreak  = Math.round(num("in-long",1,120,state.settings.longBreak));
   state.settings.cycles     = Math.round(num("in-cycles",1,12,state.settings.cycles));
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
-  state.settings.weeklyDays = Math.round(num("in-weekdays",1,7,state.settings.weeklyDays||5));
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
   state.settings.countdownDate = document.getElementById("in-cd-date").value;

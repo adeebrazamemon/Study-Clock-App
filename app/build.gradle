@@ -10,7 +10,7 @@ android {
         applicationId "app.studyclock"
         minSdk 24
         targetSdk 35
-        versionCode 30
+        versionCode 31
         versionName "3.9"
     }
 
