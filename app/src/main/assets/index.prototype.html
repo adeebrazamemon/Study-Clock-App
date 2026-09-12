@@ -820,7 +820,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.1</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.2</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -1135,7 +1135,7 @@ function pushSync(){
         tx.set(ref, payload);
       });
     }).catch(function(){ note("Sync couldn't save just now -- it will retry."); });
-  }, 1500);
+  }, 600);
 }
 
 function signIn(){
@@ -1247,6 +1247,10 @@ var mode = "focus", running = false, remaining = 25*60, lastTick = 0;
    Lets commitElapsed() be idempotent (see there); rides along in the
    live-timer snapshot so it survives a refresh. */
 var blockCommitted = 0;
+/* When we last did a full (persist + cloud push) save during a running block,
+   so a long focus session still propagates its banked minutes to other devices
+   every 20s instead of only when it's paused. */
+var lastRunSave = 0;
 /* Each mode's paused progress (remaining + banked seconds), so tapping a
    mode tab only SELECTS that mode and never throws away another mode's
    in-progress session -- you can tab away and back and it's still there. */
@@ -1310,6 +1314,7 @@ function toggle(){
     }
     running = true;
     lastTick = Date.now();
+    lastRunSave = Date.now();
   }
   nativeSync();
   renderClock();
@@ -1370,7 +1375,12 @@ function tick(){
   remaining -= delta;
   if(remaining < 0) remaining = 0;
   commitElapsed();
-  save(false);
+  // save(false) debounces, and since tick fires every 250ms it keeps resetting
+  // -- so on its own nothing would persist or sync until the block stops. A
+  // periodic full save every 20s keeps localStorage and the cloud current
+  // through a long block.
+  if(now - lastRunSave > 20000){ lastRunSave = now; save(true); }
+  else { save(false); }
   if(remaining <= 0){ blockFinished(); }
   renderClock();
 }
