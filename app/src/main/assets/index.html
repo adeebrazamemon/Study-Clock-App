@@ -820,7 +820,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.0</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.1</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -922,6 +922,7 @@ var state = {
   activeCat:null,
   days:{},          // "2026-09-04": { c1: seconds }
   taskTime:{},      // "2026-09-04": { taskId: seconds }  (a subset of days)
+  daysMeta:{},      // "2026-09-04": epoch-ms this day was last edited (for sync merge)
   tasks:[],         // {id, text, catId, done, doneDate}
   activeTask:null,
   completed:0
@@ -937,12 +938,18 @@ function load(){
       if(Array.isArray(d.categories) && d.categories.length) state.categories = d.categories;
       if(d.days && typeof d.days === "object") state.days = d.days;
       if(d.taskTime && typeof d.taskTime === "object") state.taskTime = d.taskTime;
+      if(d.daysMeta && typeof d.daysMeta === "object") state.daysMeta = d.daysMeta;
       if(Array.isArray(d.tasks)) state.tasks = d.tasks;
       if(d.activeTask) state.activeTask = d.activeTask;
       if(typeof d.completed === "number") state.completed = d.completed;
       if(d.activeCat) state.activeCat = d.activeCat;
     }
   }catch(e){ note("Saved data could not be read. Starting fresh."); }
+  // Any pre-existing day with no timestamp gets a low sentinel: still beats a
+  // device that has never logged that day (0), but any real future edit
+  // (Date.now()) beats it, so the merge never loses already-logged history.
+  if(!state.daysMeta) state.daysMeta = {};
+  for(var mk in state.days){ if(!state.daysMeta[mk]) state.daysMeta[mk] = 1; }
   if(!getCat(state.activeCat) || getCat(state.activeCat).archived){
     var live = state.categories.filter(function(c){return !c.archived;});
     state.activeCat = live.length ? live[0].id : null;
@@ -1029,7 +1036,7 @@ function initSync(){
         applyRemoteState(snap.data());
       }else{
         // First device ever to sign in to this account: seed the cloud here.
-        ref.set(syncPayload()).catch(function(){});
+        ref.set(syncPayload()).catch(function(){ note("Sync couldn't save just now -- it will retry."); });
       }
       pullPending = false;
       syncUnsub = ref.onSnapshot(function(snap){
@@ -1043,13 +1050,44 @@ function initSync(){
   });
 }
 
+// Non-destructive merge of the logged history from two copies (local + cloud).
+// For each day, the copy with the newer "last edited" timestamp wins that whole
+// day (its categories AND its task breakdown). A tie falls to whichever holds
+// more logged time, so legacy days with no real timestamp never lose hours.
+// A cleared day keeps its (newer) timestamp with no record, so deletions still
+// propagate instead of the old value coming back.
+function dayTotal(rec){ var t = 0; for(var c in rec) t += rec[c]||0; return t; }
+function mergeLogs(a, b){
+  var aM = a.daysMeta||{}, bM = b.daysMeta||{};
+  var aD = a.days||{}, bD = b.days||{}, aT = a.taskTime||{}, bT = b.taskTime||{};
+  var keys = {}, o, k;
+  [aM, bM, aD, bD].forEach(function(obj){ for(k in obj) keys[k] = 1; });
+  var days = {}, taskTime = {}, meta = {};
+  for(k in keys){
+    var at = aM[k]||0, bt = bM[k]||0, pickB;
+    if(bt > at) pickB = true;
+    else if(at > bt) pickB = false;
+    else pickB = dayTotal(bD[k]||{}) > dayTotal(aD[k]||{});
+    var wt = at > bt ? at : bt; if(wt) meta[k] = wt;
+    var dd = pickB ? bD[k] : aD[k];
+    var tt = pickB ? bT[k] : aT[k];
+    if(dd && Object.keys(dd).length) days[k] = dd;
+    if(tt && Object.keys(tt).length) taskTime[k] = tt;
+  }
+  return { days: days, taskTime: taskTime, daysMeta: meta };
+}
+
 function applyRemoteState(d){
   if(!d || typeof d !== "object") return;
   applyingRemote = true;
   if(d.settings) Object.assign(state.settings, d.settings);
   if(Array.isArray(d.categories)) state.categories = d.categories;
-  if(d.days && typeof d.days === "object") state.days = d.days;
-  if(d.taskTime && typeof d.taskTime === "object") state.taskTime = d.taskTime;
+  // Merge history rather than adopt the cloud's copy wholesale, so a device
+  // that hasn't logged today can never wipe another device's hours.
+  var merged = mergeLogs(
+    { days: state.days, taskTime: state.taskTime, daysMeta: state.daysMeta },
+    { days: d.days, taskTime: d.taskTime, daysMeta: d.daysMeta });
+  state.days = merged.days; state.taskTime = merged.taskTime; state.daysMeta = merged.daysMeta;
   if(Array.isArray(d.tasks)) state.tasks = d.tasks;
   if("activeTask" in d) state.activeTask = d.activeTask;
   if(typeof d.completed === "number") state.completed = d.completed;
@@ -1078,7 +1116,25 @@ function pushSync(){
   if(!SYNC || !syncUser || applyingRemote || pullPending) return;
   if(pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(function(){
-    fbDb.collection("users").doc(syncUser.uid).set(syncPayload()).catch(function(){});
+    // Re-check at fire time: a pull may have started during the debounce, and
+    // pushing then could race the import.
+    if(!syncUser || applyingRemote || pullPending) return;
+    var ref = fbDb.collection("users").doc(syncUser.uid);
+    // Read-modify-write in a transaction so the history we write is merged with
+    // whatever another device wrote in the meantime -- never a blind overwrite.
+    fbDb.runTransaction(function(tx){
+      return tx.get(ref).then(function(snap){
+        var cloud = snap.exists ? snap.data() : {};
+        var merged = mergeLogs(
+          { days: state.days, taskTime: state.taskTime, daysMeta: state.daysMeta },
+          { days: cloud.days, taskTime: cloud.taskTime, daysMeta: cloud.daysMeta });
+        var payload = syncPayload();
+        payload.days = merged.days;
+        payload.taskTime = merged.taskTime;
+        payload.daysMeta = merged.daysMeta;
+        tx.set(ref, payload);
+      });
+    }).catch(function(){ note("Sync couldn't save just now -- it will retry."); });
   }, 1500);
 }
 
@@ -1135,12 +1191,16 @@ function daySeconds(k){
   var rec = state.days[k]; if(!rec) return 0;
   var t = 0; for(var id in rec) t += rec[id]||0; return t;
 }
+// Stamp a day as "just edited on this device" so the sync merge treats it as
+// the freshest copy of that day.
+function touchDay(k){ state.daysMeta[k] = Date.now(); }
 function addSeconds(k, catId, secs){
   if(!catId || !secs) return;
   if(!state.days[k]) state.days[k] = {};
   state.days[k][catId] = Math.max(0, (state.days[k][catId]||0) + secs);
   if(state.days[k][catId] === 0) delete state.days[k][catId];
   if(!Object.keys(state.days[k]).length) delete state.days[k];
+  touchDay(k);
 }
 function addTaskSeconds(k, taskId, secs){
   if(!taskId || !secs) return;
@@ -2456,6 +2516,7 @@ function setDaySeconds(k, catId, secs){
     delete state.days[k][catId];
   }
   if(state.days[k] && !Object.keys(state.days[k]).length) delete state.days[k];
+  touchDay(k);
 }
 function openDayEditor(k){
   if(!k) return;
@@ -2500,6 +2561,7 @@ document.getElementById("day-clear").addEventListener("click", function(){
   confirmDialog("Clear all logged time for this day?", function(){
     delete state.days[k];
     if(state.taskTime) delete state.taskTime[k];
+    touchDay(k);   // tombstone: a newer "empty" so the clear syncs everywhere
     save(true); dlgDay.close(); renderAll(); nativeSync();
     note("Day cleared.");
   });
