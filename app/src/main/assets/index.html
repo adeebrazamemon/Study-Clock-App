@@ -820,7 +820,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.2</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.3</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -1009,7 +1009,7 @@ function syncPayload(){
   // ceil, not round: the clock shows ceil(remaining), so ceil keeps the synced
   // device on the exact same displayed second instead of a second behind.
   p.timer = running ? null
-    : { mode:mode, remaining:Math.ceil(Math.max(0, remaining)), committed:blockCommitted };
+    : { mode:mode, remaining:Math.ceil(Math.max(0, remaining)), committed:blockCommitted, len:blockLen };
   return p;
 }
 
@@ -1098,6 +1098,7 @@ function applyRemoteState(d){
     mode = d.timer.mode || mode;
     remaining = Math.max(0, +d.timer.remaining || 0);
     blockCommitted = +d.timer.committed || 0;
+    blockLen = +d.timer.len || modeSeconds(mode);
     document.body.classList.toggle("rest", mode !== "focus");
     lastTick = Date.now();
     saveLiveTimer();
@@ -1247,6 +1248,11 @@ var mode = "focus", running = false, remaining = 25*60, lastTick = 0;
    Lets commitElapsed() be idempotent (see there); rides along in the
    live-timer snapshot so it survives a refresh. */
 var blockCommitted = 0;
+/* Length (seconds) of the block currently in progress, captured when the block
+   was created. commitElapsed() works off THIS, not the live focus-length
+   setting -- so changing the setting (here or synced from another device)
+   mid-block can't retroactively distort how much has "elapsed". */
+var blockLen = 25*60;
 /* When we last did a full (persist + cloud push) save during a running block,
    so a long focus session still propagates its banked minutes to other devices
    every 20s instead of only when it's paused. */
@@ -1264,6 +1270,7 @@ function modeSeconds(m){
 function setMode(m, autostart){
   mode = m;
   remaining = modeSeconds(m);
+  blockLen = modeSeconds(m);
   blockCommitted = 0;   // fresh block, nothing banked yet
   delete remainingByMode[m];   // a genuinely fresh block, drop any stash
   document.body.classList.toggle("rest", m !== "focus");
@@ -1279,12 +1286,13 @@ function setMode(m, autostart){
    Short break, and tapping back to Focus leaves Focus exactly where it was. */
 function selectMode(m){
   if(m === mode || running) return;
-  remainingByMode[mode] = {remaining:remaining, committed:blockCommitted};
+  remainingByMode[mode] = {remaining:remaining, committed:blockCommitted, len:blockLen};
   mode = m;
   document.body.classList.toggle("rest", m !== "focus");
   var saved = remainingByMode[m];
   remaining = saved ? saved.remaining : modeSeconds(m);
   blockCommitted = saved ? saved.committed : 0;
+  blockLen = saved ? (saved.len || modeSeconds(m)) : modeSeconds(m);
   running = false;
   lastTick = Date.now();
   nativeSync(); pushSync();   // sync the (paused) mode change to other devices
@@ -1322,13 +1330,14 @@ function toggle(){
 function resetBlock(){
   running = false;
   remaining = modeSeconds(mode);
+  blockLen = modeSeconds(mode);
   blockCommitted = 0;
   remainingByMode = {};   // Reset = clean slate for every mode
   state.completed = 0;
   save(true); nativeStop(); renderClock();
 }
 function endBlock(){
-  if(mode === "focus" && !running && remaining >= modeSeconds(mode)) return;
+  if(mode === "focus" && !running && remaining >= blockLen) return;
   // Flush the delta since the last tick (a running block hasn't ticked in up
   // to 250ms) and bank the ACTUAL elapsed before ending -- so ending a block
   // keeps the real time studied instead of throwing it away, and doesn't
@@ -1354,7 +1363,7 @@ function endBlock(){
    with no need to press End block. */
 function commitElapsed(){
   if(mode !== "focus") return;
-  var elapsed = modeSeconds(mode) - Math.max(0, remaining);
+  var elapsed = blockLen - Math.max(0, remaining);
   var add = elapsed - blockCommitted;
   if(add <= 0) return;
   var dk = key(new Date());
@@ -1459,6 +1468,7 @@ function saveLiveTimer(){
       mode: mode,
       running: running,
       committed: blockCommitted,
+      len: blockLen,
       endTime: running ? Math.round(Date.now() + Math.max(0, remaining)*1000) : null,
       pausedRemainingMs: running ? 0 : Math.round(Math.max(0, remaining)*1000)
     }));
@@ -1479,6 +1489,7 @@ function restoreLiveTimer(){
     if(!s || !s.mode) return;
     mode = s.mode;
     blockCommitted = s.committed || 0;
+    blockLen = s.len || modeSeconds(mode);
     document.body.classList.toggle("rest", mode !== "focus");
     if(s.running && s.endTime){
       running = true;
@@ -1507,8 +1518,9 @@ function nativeSync(){
       var end = Date.now() + Math.max(0, remaining)*1000;
       var nb = nextBlock();
       /* Total length of the block in progress, so the notification's progress
-         bar can show elapsed/total instead of just a countdown. */
-      var total = modeSeconds(mode)*1000;
+         bar can show elapsed/total instead of just a countdown. Use the block's
+         own captured length, not the live setting. */
+      var total = (blockLen || modeSeconds(mode))*1000;
       window.AndroidTimer.startTimer(
         String(Math.round(end)), modeLabel(),
         nb.label, String(Math.round(nb.ms)), !!state.settings.auto,
@@ -1654,7 +1666,7 @@ function renderClock(){
   digits.textContent = label;
   digits.style.display = (state.settings.showTimeLeft === false) ? "none" : "";
 
-  var total = modeSeconds(mode) || 1;
+  var total = blockLen || modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
   // Elapsed share. The ring keeps only what is left, starting where the hand is,
   // so both empty clockwise from twelve.
@@ -1676,7 +1688,7 @@ function renderClock(){
   var eb = document.getElementById("endblock");
   if(mode === "focus"){
     eb.textContent = "End block";
-    eb.style.display = (running || remaining < modeSeconds(mode)) ? "" : "none";
+    eb.style.display = (running || remaining < blockLen) ? "" : "none";
   }else{
     eb.textContent = "Skip break";
     eb.style.display = "";          // always skippable
@@ -2375,7 +2387,7 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
   state.settings.countdownDate = document.getElementById("in-cd-date").value;
-  if(wasFresh) remaining = modeSeconds(mode);
+  if(wasFresh){ remaining = modeSeconds(mode); blockLen = modeSeconds(mode); }
   save(true); dlgSettings.close(); renderAll();
 });
 
@@ -2631,6 +2643,7 @@ window.__nativeCmd = function(cmd){
   else if(cmd === "stop"){
     running = false;
     remaining = modeSeconds(mode);
+    blockLen = modeSeconds(mode);
     save(true); nativeStop(); renderClock();
   }
   else if(cmd === "exitfs"){ if(fsOn) setFullscreen(false); }
@@ -2666,8 +2679,10 @@ function adoptNativeState(){
   // that elapsed while the WebView wasn't around to tick -- no double count.
   try{
     var lv = JSON.parse(localStorage.getItem(LIVE_KEY) || "null");
-    blockCommitted = (lv && lv.mode === mode) ? (lv.committed || 0) : 0;
-  }catch(e){ blockCommitted = 0; }
+    var lvMatch = lv && lv.mode === mode;
+    blockCommitted = lvMatch ? (lv.committed || 0) : 0;
+    blockLen = (lvMatch && lv.len) ? lv.len : modeSeconds(mode);
+  }catch(e){ blockCommitted = 0; blockLen = modeSeconds(mode); }
   if(s.paused){
     running = false;
     remaining = Math.max(0, s.pausedRemaining/1000);
@@ -2708,6 +2723,7 @@ initSync();
 var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
 remaining = modeSeconds("focus");
+blockLen = modeSeconds("focus");
 lastTick = Date.now();
 restoreLiveTimer(); // overrides the defaults above if a block is already running
 applyTheme();
