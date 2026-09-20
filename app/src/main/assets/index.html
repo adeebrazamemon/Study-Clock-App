@@ -820,7 +820,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.4</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.5</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -1209,8 +1209,14 @@ function applyRemoteState(d){
   if(d.timer && !running){
     mode = d.timer.mode || mode;
     remaining = Math.max(0, +d.timer.remaining || 0);
-    blockCommitted = +d.timer.committed || 0;
     blockLen = +d.timer.len || modeSeconds(mode);
+    // The device that actually ran this block already logged its elapsed time
+    // into its own ledger record. So treat the block as fully banked here:
+    // adopting it must never re-log that time on this device, which (totals
+    // being the sum across devices) would double-count it. Taking the max
+    // also absorbs a block length that doesn't match, instead of crediting
+    // the difference as time studied.
+    blockCommitted = Math.max(+d.timer.committed || 0, blockLen - remaining);
     document.body.classList.toggle("rest", mode !== "focus");
     lastTick = Date.now();
     saveLiveTimer();

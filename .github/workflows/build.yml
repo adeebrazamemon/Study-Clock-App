@@ -23,8 +23,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # android-actions/setup-android@v3 started failing (runs 79 and 80), which
+      # silently froze the published APK at 4.2 while the web build kept
+      # updating. The GitHub runner image already ships an Android SDK, so use
+      # that directly instead of depending on a third-party action. Each step is
+      # named so a failure identifies itself without needing the logs.
+      - name: Locate Android SDK
+        run: |
+          set -eu
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$SDK" || { echo "No Android SDK directory at $SDK"; exit 1; }
+          SDKMGR="$(find "$SDK/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1 || true)"
+          test -n "$SDKMGR" || { echo "sdkmanager not found under $SDK/cmdline-tools"; exit 1; }
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
+          echo "SDK=$SDK"; echo "sdkmanager=$SDKMGR"
+          ls "$SDK/platforms" || true
+
+      - name: Install SDK packages for compileSdk 36
+        run: |
+          set -eu
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
