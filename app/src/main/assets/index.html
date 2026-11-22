@@ -205,6 +205,11 @@
   body.fs .page{display:none}
   body.fs .page#page-clock{display:block}
   body.fs .card{border:none;background:none;padding:0}
+  /* In full screen the clock is laid out by the viewport, not by its (now
+     collapsed) card: stop the card being a size container, or the card-based
+     layouts below see a 0px-tall card and shrink the face to nothing. */
+  body.fs #page-clock > .card{container-type:normal !important}
+  body.fs #page-clock .clockdisplay{flex:none !important;height:auto !important;display:flex !important;flex-direction:column;align-items:center}
   body.fs .clockwrap{
     position:fixed;inset:0;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:clamp(12px,3vh,32px);
@@ -821,9 +826,9 @@
   /* Full screen is where a scene shows best: the clock floats in one glass
      panel in the middle, smaller, with the whole scene around it. */
   body.scene.fs .card{background:none;border:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
-  body.scene.fs .clockwrap{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:auto;height:auto;
+  body.scene.fs #page-clock .clockwrap{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:auto !important;height:auto !important;min-height:0 !important;
     max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:clamp(18px,3.5vh,34px) clamp(22px,4vw,44px);
-    border-radius:28px;background:var(--glass);border:1px solid var(--glass-line);gap:clamp(10px,2vh,22px);
+    border-radius:28px;background:var(--glass-soft,var(--glass));border:1px solid var(--glass-line);gap:clamp(10px,2vh,22px);
     -webkit-backdrop-filter:blur(20px) saturate(1.15);backdrop-filter:blur(20px) saturate(1.15);
     box-shadow:0 24px 60px -24px rgba(0,0,0,.5)}
   body.scene.fs .face{width:min(62vw,44vh)!important;height:min(62vw,44vh)!important}
@@ -3350,6 +3355,13 @@ function updateGlass(){
   bgs = tones.map(function(t){ return mixRgb(t, surf, a); });
   root.style.setProperty("--glass", "rgba(" + surf.join(",") + "," + a.toFixed(2) + ")");
   root.style.setProperty("--glass-line", "rgba(" + ink.join(",") + ",.14)");
+  // The full-screen panel holds only large text (the time, the clock), so it
+  // can be clearer: WCAG's large-text levels (4.5:1 text, 3:1 secondary).
+  var a2 = 0.3;
+  for(; a2 < a; a2 += 0.02){
+    if(tones.every(function(t){ var bg = mixRgb(t, surf, a2); return contrastRatio(ink, bg) >= 4.5 && contrastRatio(muted, bg) >= 3; })) break;
+  }
+  root.style.setProperty("--glass-soft", "rgba(" + surf.join(",") + "," + Math.min(a, a2).toFixed(2) + ")");
   // Coloured text: readable on the glass too, not just on a solid card.
   [["--focus-text", "--focus"], ["--rest-text", "--rest"], ["--warn-text", "--warn"]].forEach(function(p){
     var c = parseColor(cs.getPropertyValue(p[1]));
