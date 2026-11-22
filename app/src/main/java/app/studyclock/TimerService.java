@@ -234,7 +234,7 @@ public class TimerService extends Service {
     private void onBlockEnd() {
         if (paused) return;
         if (System.currentTimeMillis() < endTime) return;
-        alertFinished(this, isLockIn() ? "Lock-in ended" : isZen() ? "Zen session ended" : label + " done",
+        alertFinished(this, isLockIn() ? "Lock-in ended" : label + " done",
                 nextLabel != null && !nextLabel.isEmpty() ? "Next: " + nextLabel : "Session finished.");
         // It ran its whole length, ending at endTime (not now: this alarm can
         // fire late under Doze, and that lag isn't study time).
@@ -373,28 +373,26 @@ public class TimerService extends Service {
                 // show a normal ongoing notification.
                 .setRequestPromotedOngoing(true);
 
-        // Lock in and Zen count UP from when they started and have no progress
-        // bar. Lock in's only button is End (it has no pause); Zen can pause.
-        boolean lock = isLockIn(), zen = isZen(), up = lock || zen;
+        // Lock in counts UP from when it started, has no progress bar, and its
+        // only button is End (it has no pause).
+        boolean lock = isLockIn();
 
         // Android draws and ticks the clock; nothing here runs per second.
         if (!paused && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             b.setUsesChronometer(true);
-            b.setChronometerCountDown(!up);
-            // endTime - totalMs is when the session started (the page hands over
+            b.setChronometerCountDown(!lock);
+            // endTime - totalMs is when the lock-in started (the page hands over
             // the remaining time against its full, fixed length).
-            b.setWhen(up ? endTime - totalMs : endTime);
+            b.setWhen(lock ? endTime - totalMs : endTime);
         }
         if (paused) {
             b.setShowWhen(false);
             b.setContentText(lock ? "Lock-in ended"
-                    : zen ? (pausedRemaining > 0 && pausedRemaining < totalMs
-                            ? "Paused at " + mmss(totalMs - pausedRemaining) : "Zen session ended")
                     : pausedRemaining > 0 ? "Paused at " + mmss(pausedRemaining)
                     : "Block finished");
         }
 
-        if (totalMs > 0 && !up) {
+        if (totalMs > 0 && !lock) {
             // setStyledByProgress(false) -- what the previous two attempts
             // both had -- explicitly tells the OS *not* to visually
             // distinguish behind-progress from ahead-of-progress at all, so
@@ -428,12 +426,6 @@ public class TimerService extends Service {
             // Ending a lock-in records it exactly like Skip does for a block
             // (elapsed so far, then nothing queued), so it reuses that action.
             if (!paused) b.addAction(0, "End", servicePi(ACTION_SKIP, 11));
-        } else if (zen) {
-            // Zen can pause; End records it the same way (via Skip).
-            if (!paused || pausedRemaining > 0) {
-                b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
-                b.addAction(0, "End", servicePi(ACTION_SKIP, 11));
-            }
         } else {
             b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
             b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
@@ -443,15 +435,11 @@ public class TimerService extends Service {
         return b.build();
     }
 
-    /* label is always exactly "Focus", "Short break", "Long break", "Lock in"
-       or "Zen" (see labelFor() in index.html), so these string checks are safe
-       rather than fragile. Both break lengths share one color; focus differs. */
+    /* label is always exactly "Focus", "Short break", "Long break" or "Lock in"
+       (see labelFor() in index.html), so these string checks are safe rather
+       than fragile. Both break lengths share one color; focus differs. */
     private boolean isLockIn() {
         return "Lock in".equals(label);
-    }
-
-    private boolean isZen() {
-        return "Zen".equals(label);
     }
 
     private int progressColor() {
