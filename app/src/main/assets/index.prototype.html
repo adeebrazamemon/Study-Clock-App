@@ -152,10 +152,11 @@
   /* Lock in: the tab row shows your last and best run instead of the tabs. */
   .lockstats{display:none;align-items:center;justify-content:center;gap:18px;min-height:33px;font-size:13px;color:var(--muted);white-space:nowrap}
   .lockstats b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;margin-left:5px}
-  body.lockin .mode-row button{display:none}
-  body.lockin .lockstats{display:flex}
+  body.lockin .mode-row button,body.zen .mode-row button{display:none}
+  body.lockin .lockstats,body.zen .zenhint{display:flex}
+  .zenhint{display:none;align-items:center;justify-content:center;min-height:33px;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   /* Lock in has no Reset (the session just ends). */
-  body.lockin #reset{display:none !important}
+  body.lockin #reset,body.zen #reset{display:none !important}
 
   /* min(250px, 62vw): full size on anything roomy, but shrinks with the
      viewport on a narrow phone instead of crowding the card edges. */
@@ -733,7 +734,9 @@
     #page-clock .card .kindrow{grid-area:kind}
     #page-clock .card .mode-row{grid-area:tabs}
     #page-clock .card .mode-row{flex-wrap:nowrap}
-    #page-clock .card .kindrow button{padding:5px 12px;font-size:12.5px}
+    #page-clock .card .kindrow button{padding:5px 9px;font-size:12.5px}
+    #page-clock .card .clockextras{gap:4px}
+    #page-clock .card .cicon{width:28px;height:28px}
     #page-clock .card .mirrornote{grid-area:mirror;margin:0}
     #page-clock .card .controls{grid-area:ctrl;margin:0;flex-wrap:nowrap;gap:8px}
     #page-clock .card .controls button{padding:8px 13px;font-size:13.5px}
@@ -781,15 +784,18 @@
     .mode-row{flex-wrap:nowrap}
     .mode-row button{padding:6px 11px;font-size:12.5px}
     .modehead{gap:6px}
-    .kindrow button{padding:5px 13px;font-size:13px}
+    /* Three modes + three icons share the top line: both a touch tighter. */
+    .kindrow button{padding:5px 10px;font-size:12.5px}
+    .clockextras{gap:4px}
+    .cicon{width:29px;height:29px}
     /* Start / Reset / Skip break stay on one line (wrapped, they cost the face a row). */
     .controls{flex-wrap:nowrap;gap:8px}
     .controls button{padding-left:15px;padding-right:15px;white-space:nowrap}
   }
-  @container clock (max-width:330px){ .kindrow button{padding:5px 11px;font-size:12.5px} }
+  @container clock (max-width:330px){ .kindrow button{padding:5px 9px;font-size:12px} }
   /* Wide cards: the mode switch and its tabs on one line, like a toolbar (the
      corner icons sit at the right end of it), so the face keeps that height. */
-  @container clock (min-width:620px){
+  @container clock (min-width:650px){
     .modehead{flex-direction:row;align-self:stretch;justify-content:flex-start;gap:14px}
   }
   /* ...and the mode switch shares its line with the corner icons (left and
@@ -892,6 +898,23 @@
     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:9px 18px;box-shadow:none}
   body.scene.fs.sc-min .controls button.primary{background:rgba(255,255,255,.22);font-weight:600}
 
+  /* Zen in full screen: no card, no panel -- the whole scene, the time large and
+     faint behind everything, and the buttons along the bottom (faded until you
+     touch, as in any full screen). */
+  .zentime{display:none;position:fixed;inset:0;z-index:0;pointer-events:none;align-items:center;justify-content:center;
+    padding-bottom:8vh;color:#fff;font-size:clamp(84px,24vmin,300px);font-weight:200;letter-spacing:.02em;
+    font-variant-numeric:tabular-nums;opacity:.34;text-shadow:0 2px 40px rgba(0,0,0,.25);transition:opacity .6s}
+  .zentime.paused{opacity:.2}
+  body.fs.zen .zentime{display:flex}
+  body.fs.zen #page-clock .clockdisplay,body.fs.zen .goalwrap,body.fs.zen .mirrornote,body.fs.zen .sclock{display:none !important}
+  body.fs.zen #page-clock .clockwrap{top:auto !important;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    background:none !important;border:none !important;box-shadow:none !important;padding:0 !important;
+    -webkit-backdrop-filter:none !important;backdrop-filter:none !important}
+  body.fs.zen .controls{gap:10px}
+  body.fs.zen .controls button{background:rgba(8,10,20,.32);color:#fff;border:1px solid rgba(255,255,255,.2);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:9px 18px;box-shadow:none}
+  body.fs.zen .controls button.primary{background:rgba(255,255,255,.22);font-weight:600}
+
   /* Scene picker (Settings > Scenes). */
   .scenegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:10px;margin-bottom:12px}
   .scenecard{display:flex;flex-direction:column;gap:6px;padding:0;background:none;border:none;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
@@ -920,6 +943,8 @@
 </head>
 <body>
 <div id="scenebg" aria-hidden="true"></div>
+<!-- Zen's full-screen clock: large and faint, behind everything. -->
+<div class="zentime" id="zentime" aria-hidden="true"></div>
 <div class="shell">
 
   <header class="top">
@@ -992,6 +1017,7 @@
           </div>
           <div class="kindrow" role="radiogroup" aria-label="Mode">
             <button type="button" role="radio" data-kind="pomodoro" aria-checked="true" title="Focus blocks with breaks in between">Pomodoro</button>
+            <button type="button" role="radio" data-kind="zen" aria-checked="false" title="Just the scene, with the time quietly behind it">Zen</button>
             <button type="button" role="radio" data-kind="lockin" aria-checked="false" title="No timer, no breaks: it counts up until you end it">Lock in</button>
           </div>
           <div class="mode-row">
@@ -999,6 +1025,7 @@
             <button id="m-short" aria-pressed="false">Short break</button>
             <button id="m-long" aria-pressed="false">Long break</button>
             <div class="lockstats" id="lockstats"><span>Last run<b id="lock-last">--</b></span><span>Best run<b id="lock-best">--</b></span></div>
+            <div class="zenhint" id="zenhint">Full screen, just the scene</div>
           </div>
         </div>
 
@@ -2965,10 +2992,13 @@ var remainingByMode = {};
    to the Android service all goes through the same path as a focus block. The
    block is LOCKIN_CAP long under the hood; the display shows elapsed time. */
 var LOCKIN_CAP = 12*3600;
-function focusLike(m){ return m === "focus" || m === "lockin"; }
+function focusLike(m){ return m === "focus" || m === "lockin" || m === "zen"; }
+// Lock in and Zen count up (one long block, shown as time elapsed).
+function countsUp(m){ return m === "lockin" || m === "zen"; }
 function setModeClass(m){
   document.body.classList.toggle("rest", !focusLike(m));
   document.body.classList.toggle("lockin", m === "lockin");
+  document.body.classList.toggle("zen", m === "zen");
 }
 function lockElapsed(){ return Math.max(0, Math.min(blockLen, blockLen - remaining)); }
 // "1h 12m", "24m", "45s"
@@ -3005,12 +3035,16 @@ function startStop(){
     document.getElementById("dlg-lockend").showModal();
     return;
   }
+  // Starting (or resuming) Zen opens its full-screen view: the scene, the time
+  // faint behind it, controls on a tap.
+  var zenStart = mode === "zen" && !running;
   toggle();
+  if(zenStart && running && !fsOn) setFullscreen(true);
 }
 
 function modeSeconds(m){
   if(m === "focus") return state.settings.focus*60;
-  if(m === "lockin") return LOCKIN_CAP;
+  if(countsUp(m)) return LOCKIN_CAP;
   if(m === "shortBreak") return state.settings.shortBreak*60;
   return state.settings.longBreak*60;
 }
@@ -3185,6 +3219,16 @@ function blockFinished(){
   // The page has just accounted for this block itself; if the service also
   // recorded it as finished, that record must not be credited again later.
   ackService();
+  if(mode === "zen"){
+    // Ended (End, or the 12-hour cap): back to a fresh Zen, out of full screen.
+    if(blockCommitted >= LOCKIN_CAP - 1){ chime(); nativeDone(mode); }
+    if(blockCommitted >= 60) note("Zen session: " + fmtDur(blockCommitted) + ".");
+    setMode("zen", false);
+    if(fsOn) setFullscreen(false);
+    save(true);
+    renderAll();
+    return;
+  }
   if(mode === "lockin"){
     // Ended by you (End), or it ran into the 12-hour cap. Only the cap is a
     // surprise worth a chime and an alert; ending it yourself is quiet.
@@ -3239,6 +3283,7 @@ var nativeLive = false;
 function labelFor(m){
   if(m === "focus") return "Focus";
   if(m === "lockin") return "Lock in";
+  if(m === "zen") return "Zen";
   return m === "shortBreak" ? "Short break" : "Long break";
 }
 function modeLabel(){ return labelFor(mode); }
@@ -3246,7 +3291,7 @@ function modeLabel(){ return labelFor(mode); }
 /* One block of lookahead for the service, using the same rule blockFinished
    uses, so both sides land on the same next block. */
 function nextBlock(){
-  if(mode === "lockin") return { label: "", ms: 0 };   // nothing follows a lock-in
+  if(countsUp(mode)) return { label: "", ms: 0 };   // nothing follows a lock-in or Zen session
   var m;
   if(mode === "focus"){
     var done = state.completed + 1;
@@ -3339,7 +3384,8 @@ function nativeSync(){
   if(!NATIVE) return;
   // A lock-in that isn't running has nothing to show: drop the notification
   // (but keep the local snapshot, so the Lock in tab stays selected).
-  if(mode === "lockin" && !running){
+  // Zen that hasn't started has nothing to show either; a paused one keeps it.
+  if((mode === "lockin" && !running) || (mode === "zen" && !running && remaining >= blockLen - 0.5)){
     if(nativeLive){ try{ window.AndroidTimer.stopTimer(); }catch(e){} nativeLive = false; }
     return;
   }
@@ -3373,8 +3419,8 @@ function nativeStop(){
 function nativeDone(finishedMode){
   if(!NATIVE) return;
   try{
-    var title = finishedMode === "lockin" ? "Lock-in ended" : finishedMode === "focus" ? "Focus block done" : "Break over";
-    var body = finishedMode === "lockin" ? "12 hours locked in. Today: " + fmtHM(daySeconds(key(new Date())))
+    var title = finishedMode === "lockin" ? "Lock-in ended" : finishedMode === "zen" ? "Zen session ended" : finishedMode === "focus" ? "Focus block done" : "Break over";
+    var body = countsUp(finishedMode) ? "12 hours in. Today: " + fmtHM(daySeconds(key(new Date())))
       : finishedMode === "focus"
       ? "Time for a break. Today: " + fmtHM(daySeconds(key(new Date())))
       : "Back to " + catName(state.activeCat) + ".";
@@ -3475,6 +3521,8 @@ function sceneTarget(){
 // Mount, swap or remove the scene to match the setting.
 function syncScene(){
   var want = state.settings.scene || "none";
+  // Zen is "just the scene": in its full-screen view there always is one.
+  if(want === "none" && fsOn && mode === "zen") want = "valley";
   if(!scenesReady() || !Scenes.has(want)) want = "none";
   if(want !== sceneId){
     if(sceneInst){ sceneInst.destroy(); sceneInst = null; }
@@ -3677,14 +3725,21 @@ function renderClock(){
   var sig = style + "|" + (state.settings.analogStyle||"ticks") + "|" + (state.settings.digitStyle||"plain");
   if(faceBuilt !== sig) buildFace(style);
 
-  var lock = mode === "lockin";
+  var lock = mode === "lockin", up = countsUp(mode);
   var secs = Math.max(0, Math.ceil(remaining));
   // Lock in counts up; everything else counts down.
-  var label = lock ? fmtElapsed(lockElapsed()) : pad(Math.floor(secs/60))+":"+pad(secs%60);
+  var label = up ? fmtElapsed(lockElapsed()) : pad(Math.floor(secs/60))+":"+pad(secs%60);
 
   var digits = document.getElementById("digits");
   digits.textContent = label;
   digits.style.display = (state.settings.showTimeLeft === false) ? "none" : "";
+
+  // Zen's full-screen clock: the time, large and faint behind the scene.
+  if(mode === "zen" && fsOn){
+    var zt = document.getElementById("zentime");
+    zt.textContent = label;
+    zt.classList.toggle("paused", !running);
+  }
 
   // The minimal scene clock (full screen with a scene on).
   if(document.body.classList.contains("scene") && fsOn){
@@ -3705,6 +3760,9 @@ function renderClock(){
   if(lock){
     var ref = (+state.settings.lockBest || 0) >= 60 ? +state.settings.lockBest : 3600;
     frac = Math.max(0, 1 - lockElapsed()/ref);
+  }else if(mode === "zen"){
+    // Zen: the ring goes round once an hour, like a slow second hand.
+    frac = 1 - (lockElapsed() % 3600)/3600;
   }
   // Elapsed share. The ring keeps only what is left, starting where the hand is,
   // so both empty clockwise from twelve.
@@ -3739,6 +3797,9 @@ function renderClock(){
   var eb = document.getElementById("endblock");
   if(lock){
     eb.style.display = "none";      // the main button ends a lock-in
+  }else if(mode === "zen"){
+    eb.textContent = "End";
+    eb.style.display = (running || remaining < blockLen - 0.5) ? "" : "none";
   }else if(mode === "focus"){
     eb.textContent = "End block";
     eb.style.display = (running || remaining < blockLen) ? "" : "none";
@@ -3749,7 +3810,7 @@ function renderClock(){
   if(mirror) eb.style.display = "none";
   renderGoalBar();
   var done = state.completed % state.settings.cycles, cn = document.getElementById("cyclenote");
-  if(lock){
+  if(up){
     // The last and best run show where the tabs are (see renderModeButtons).
     cn.textContent = ""; cn.title = "";
   }else{
@@ -3757,7 +3818,7 @@ function renderClock(){
     cn.title = "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
   }
   document.title = (running ? label + " " : "") +
-    (lock ? "Lock in" : mode === "focus" ? "Focus" : "Break") + " · Study Clock";
+    (up ? labelFor(mode) : mode === "focus" ? "Focus" : "Break") + " · Study Clock";
   syncAmbient();
 }
 function renderGoalBar(){
@@ -4067,7 +4128,7 @@ function renderModeButtons(){
   document.getElementById("m-short").setAttribute("aria-pressed", mode==="shortBreak");
   document.getElementById("m-long").setAttribute("aria-pressed", mode==="longBreak");
   // The mode switch, and Lock in's last / best run.
-  var kind = mode === "lockin" ? "lockin" : "pomodoro";
+  var kind = countsUp(mode) ? mode : "pomodoro";
   if(kind === "pomodoro") lastPomo = mode;
   Array.prototype.forEach.call(document.querySelectorAll(".kindrow button"), function(b){
     b.setAttribute("aria-checked", b.getAttribute("data-kind") === kind);
@@ -4082,6 +4143,7 @@ var fsOn = false;
 function setFullscreen(on){
   fsOn = !!on;
   document.body.classList.toggle("fs", fsOn);
+  applyTheme();   // (re)syncs the scene: Zen brings one in for its full-screen view if none is chosen
   nativeFullscreen(fsOn);
   if(fsOn){
     if(document.documentElement.requestFullscreen)
@@ -4095,7 +4157,7 @@ function setFullscreen(on){
 }
 document.addEventListener("fullscreenchange", function(){
   // Leaving via the browser's own gesture should drop our layout too.
-  if(!document.fullscreenElement && fsOn){ fsOn = false; document.body.classList.remove("fs"); nativeFullscreen(false); }
+  if(!document.fullscreenElement && fsOn){ fsOn = false; document.body.classList.remove("fs"); nativeFullscreen(false); applyTheme(); renderClock(); }
 });
 
 /* ---------- pages ---------- */
@@ -5301,10 +5363,10 @@ document.getElementById("m-long").addEventListener("click", function(){ selectMo
 var lastPomo = "focus";
 Array.prototype.forEach.call(document.querySelectorAll(".kindrow button"), function(b){
   b.addEventListener("click", function(){
-    var want = b.getAttribute("data-kind"), cur = mode === "lockin" ? "lockin" : "pomodoro";
+    var want = b.getAttribute("data-kind"), cur = countsUp(mode) ? mode : "pomodoro";
     if(want === cur) return;
     if(running){ note(cur === "lockin" ? "End the lock-in first." : "Pause the timer first."); return; }
-    selectMode(want === "lockin" ? "lockin" : (lastPomo || "focus"));
+    selectMode(want === "pomodoro" ? (lastPomo || "focus") : want);
   });
 });
 document.getElementById("lockend-keep").addEventListener("click", function(){ document.getElementById("dlg-lockend").close(); });
@@ -5391,7 +5453,7 @@ document.addEventListener("keydown", function(e){
     if(e.key === "Escape" && selectedDay){ e.preventDefault(); selectedDay = null; renderCalendar(); renderBreakdown(); return; }
   }
   if(e.code === "Space"){ e.preventDefault(); startStop(); }
-  else if((e.key === "r" || e.key === "R") && mode !== "lockin"){ resetBlock(); }   // Lock in has no Reset
+  else if((e.key === "r" || e.key === "R") && !countsUp(mode)){ resetBlock(); }   // Lock in and Zen have no Reset
   else if(e.key === "f" || e.key === "F"){ setFullscreen(!fsOn); }
   else if(e.key === "Escape" && fsOn){ setFullscreen(false); }
 });
@@ -5430,7 +5492,7 @@ window.__closeTopDialog = function(){
    true and adopt that instead of trusting this page's own possibly-stale
    mode/running/remaining. Only those three adopt; state.* (stats, tasks,
    categories) is untouched, so nothing here risks double-counting time. */
-function labelMode(l){ return l === "Short break" ? "shortBreak" : l === "Long break" ? "longBreak" : l === "Lock in" ? "lockin" : "focus"; }
+function labelMode(l){ return l === "Short break" ? "shortBreak" : l === "Long break" ? "longBreak" : l === "Lock in" ? "lockin" : l === "Zen" ? "zen" : "focus"; }
 /* Returns true if the service had a timer to adopt.
    This used to adopt only the service's CURRENT block. But when a focus block
    ends while the app is backgrounded, the service rolls straight on to the
@@ -5461,7 +5523,8 @@ function adoptNativeState(){
     var add = (+e.elapsed || 0)/1000 - banked;
     if(add > 0) bankAt(+e.end || Date.now(), add);
     // A lock-in isn't a Pomodoro session: it doesn't count toward the long break.
-    if(em === "lockin") lockInEnded((+e.elapsed || 0)/1000); else state.completed++;
+    // Lock in and Zen aren't Pomodoro sessions: they don't count toward the long break.
+    if(em === "lockin") lockInEnded((+e.elapsed || 0)/1000); else if(em === "focus") state.completed++;
   });
   liveSeq = s.seq || 0;
   liveSid = s.sid || null;
@@ -5498,7 +5561,7 @@ function adoptNativeState(){
   commitElapsed();
   if(spent){
     // Move on to the next block, paused, as the page would have.
-    var next = mode === "lockin" ? "lockin" : mode !== "focus" ? "focus"
+    var next = countsUp(mode) ? mode : mode !== "focus" ? "focus"
       : (state.completed % state.settings.cycles === 0) ? "longBreak" : "shortBreak";
     setMode(next, false);
   }else if(!s.paused && remaining <= 0){
