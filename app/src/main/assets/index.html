@@ -877,6 +877,15 @@
   .field-col input[type=range]{width:100%;accent-color:var(--focus)}
   /* While picking a scene, dim the page behind the dialog less so you can see it. */
   #dlg-settings.scenes-open::backdrop{background:rgba(0,0,0,.12)}
+
+  /* Daily goal reached: a small card and a burst of confetti (see celebrateGoal). */
+  .cheer{position:fixed;left:50%;top:16%;z-index:120;transform:translate(-50%,-12px);opacity:0;pointer-events:none;
+    padding:14px 24px 13px;border-radius:16px;text-align:center;background:var(--surface);border:1px solid var(--line);
+    box-shadow:0 18px 50px -18px rgba(0,0,0,.5);transition:opacity .4s,transform .4s}
+  .cheer.on{opacity:1;transform:translate(-50%,0)}
+  .cheer b{display:block;font-size:17px;font-weight:600;color:var(--ink)}
+  .cheer span{display:block;margin-top:2px;font-size:13px;color:var(--muted)}
+  #confetti{position:fixed;inset:0;width:100%;height:100%;z-index:119;pointer-events:none}
 </style>
 </head>
 <body>
@@ -1055,6 +1064,7 @@
     </div>
     <div class="field"><label for="in-auto">Start the next block automatically</label><input type="checkbox" id="in-auto"></div>
     <div class="field"><label for="in-sound">Chime when a block ends</label><input type="checkbox" id="in-sound"></div>
+    <div class="field"><label for="in-celebrate">Celebrate reaching my daily target</label><input type="checkbox" id="in-celebrate"></div>
   </div>
 
   <div class="dpane" id="pane-app">
@@ -2140,7 +2150,7 @@ var state = {
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
             showGoal:true, showCycle:true, countdownDate:"", calColor:"",
-            scene:"none", sceneDrive:"goal", sceneMotion:true, sceneClock:"minimal", lockBest:0},
+            scene:"none", sceneDrive:"goal", sceneMotion:true, sceneClock:"minimal", lockBest:0, celebrate:true},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
   // Logged time lives in `log` (see the ledger section): per day, one record
@@ -3716,6 +3726,83 @@ function renderGoalBar(){
   document.getElementById("goalnow").innerHTML =
     "<b>" + fmtHM(total) + "</b>" + (total >= goal ? " \u2713" : "");
   document.getElementById("goalof").textContent = "of " + fmtShort(goal) + " target";
+  checkGoalCelebration(total, goal);
+}
+
+/* Reaching the daily target: celebrate the moment today's total crosses it --
+   not on opening the app with the target already met, and once a day per
+   device (remembered locally, so a reload or a synced update can't repeat it). */
+var goalSeen = null;   // {day, reached} as of the last check
+var CHEER_KEY = "studyClock.v1.cheer";
+function checkGoalCelebration(total, goal){
+  var k = key(new Date()), reached = total >= goal;
+  if(!goalSeen || goalSeen.day !== k){ goalSeen = {day:k, reached:reached}; return; }
+  if(reached && !goalSeen.reached){
+    var last = null;
+    try{ last = localStorage.getItem(CHEER_KEY); }catch(e){}
+    if(last !== k && state.settings.celebrate !== false){
+      try{ localStorage.setItem(CHEER_KEY, k); }catch(e){}
+      celebrateGoal(goal);
+    }
+  }
+  goalSeen.reached = reached;
+}
+function celebrateGoal(goal){
+  var card = document.createElement("div");
+  card.className = "cheer"; card.setAttribute("role", "status");
+  card.innerHTML = "<b>Daily target reached</b><span></span>";
+  card.querySelector("span").textContent = fmtShort(goal) + " today. Well done.";
+  document.body.appendChild(card);
+  requestAnimationFrame(function(){ card.classList.add("on"); });
+  setTimeout(function(){ card.classList.remove("on"); setTimeout(function(){ card.remove(); }, 500); }, 3800);
+  if(state.settings.sound) cheerChime();
+  if(!reduceMotion) confetti();
+}
+function cheerChime(){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    var t0 = audioCtx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach(function(f, i){   // C major, rising
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain(), off = i*0.11;
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.18, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.5);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t0 + off); o.stop(t0 + off + 0.55);
+    });
+  }catch(e){}
+}
+// A short burst of confetti in the accent and category colours.
+function confetti(){
+  var cv = document.createElement("canvas"); cv.id = "confetti";
+  document.body.appendChild(cv);
+  var dpr = Math.min(2, window.devicePixelRatio || 1), W2 = innerWidth, H2 = innerHeight;
+  cv.width = W2*dpr; cv.height = H2*dpr;
+  var cx = cv.getContext("2d"); cx.scale(dpr, dpr);
+  var cs = getComputedStyle(document.documentElement);
+  var cols = [cs.getPropertyValue("--focus").trim() || "#1F6F5C", "#f6c945", "#f28fb1", "#7cc4f7", "#ffffff"]
+    .concat(state.categories.filter(function(c){ return !c.archived; }).map(function(c){ return c.color; }).slice(0, 4));
+  var parts = [];
+  for(var i = 0; i < 140; i++){
+    var a = -Math.PI/2 + (Math.random() - .5)*1.6, sp = 7 + Math.random()*9;
+    parts.push({x:W2/2 + (Math.random() - .5)*80, y:H2*.32, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      w:5 + Math.random()*6, h:3 + Math.random()*5, r:Math.random()*6, vr:(Math.random() - .5)*.35,
+      c:cols[i % cols.length]});
+  }
+  var start = performance.now();
+  (function frame(now){
+    var t = now - start;
+    cx.clearRect(0, 0, W2, H2);
+    parts.forEach(function(p){
+      p.vy += 0.32; p.vx *= 0.985; p.vy *= 0.985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r);
+      cx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 1800)/900);
+      cx.fillStyle = p.c; cx.fillRect(-p.w/2, -p.h/2, p.w, p.h*Math.abs(Math.cos(p.r*1.7)) + .5);
+      cx.restore();
+    });
+    if(t < 2700) requestAnimationFrame(frame); else cv.remove();
+  })(start);
 }
 
 function renderTaskChips(){
@@ -4445,6 +4532,7 @@ function fillSettingsInputs(){
   document.getElementById("in-goal").value = state.settings.goal;
   document.getElementById("in-auto").checked = state.settings.auto;
   document.getElementById("in-sound").checked = state.settings.sound;
+  document.getElementById("in-celebrate").checked = state.settings.celebrate !== false;
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
   document.getElementById("in-tod").checked = state.settings.showTod !== false;
   document.getElementById("in-timeleft").checked = state.settings.showTimeLeft !== false;
@@ -4600,6 +4688,7 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
+  state.settings.celebrate = document.getElementById("in-celebrate").checked;
   var cdv = document.getElementById("in-cd-date").value;
   if(!cdv || cdv >= tomorrowKey()) state.settings.countdownDate = cdv;   // never save a past/today date
   if(wasFresh){ remaining = modeSeconds(mode); blockLen = modeSeconds(mode); }
