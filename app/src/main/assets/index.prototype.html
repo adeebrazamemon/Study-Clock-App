@@ -292,12 +292,12 @@
   .day.blank{border:none;background:none;cursor:default}
   .day .dn{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
   .day.filled .dn{color:var(--dn, rgba(255,255,255,.9));font-weight:600}
-  /* Today pops out (raised, a touch larger); the ring marks only the day being
-     looked at -- it starts on today and follows your selection. */
-  .day.today{transform:scale(1.07);z-index:1;font-weight:700;
-    box-shadow:0 8px 18px -6px rgba(0,0,0,.5), 0 0 0 1px color-mix(in srgb, var(--ink) 28%, transparent)}
-  .day.today:not(.filled){background:color-mix(in srgb, var(--surface) 86%, var(--ink))}
-  .day.today .dn{font-weight:700}
+  /* Today lifts off the grid in its own colour (raised, a touch larger, soft
+     shadow). The ring marks only the day being looked at, starting on today. */
+  .day.today{transform:translateY(-3px) scale(1.08);z-index:1;
+    box-shadow:0 10px 18px -8px rgba(0,0,0,.55), 0 3px 6px -3px rgba(0,0,0,.35)}
+  .day.today .dn{font-weight:700;color:var(--ink)}
+  .day.today.filled .dn{color:var(--dn, rgba(255,255,255,.92))}
   .day[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:-1px}
 
   .breakdown{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
@@ -693,7 +693,7 @@
     button,.chip,.day,.task,.ovpill,.stat{transition:background-color .15s, border-color .15s, color .15s, transform .12s, box-shadow .15s}
     button:active:not(:disabled){transform:scale(.97)}
     .day:not(.blank):hover{transform:translateY(-1px);box-shadow:0 3px 10px -4px rgba(0,0,0,.25)}
-    .day.today:not(.blank):hover{transform:scale(1.07) translateY(-1px)}
+    .day.today:not(.blank):hover{transform:translateY(-4px) scale(1.08)}
     .card{transition:box-shadow .2s}
   }
 </style>
