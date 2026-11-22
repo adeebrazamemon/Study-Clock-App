@@ -296,11 +296,6 @@
      shadow). The ring marks only the day being looked at, starting on today. */
   .day.today{transform:translateY(-3px) scale(1.08);z-index:1;
     box-shadow:0 0 0 1.5px var(--cal-mark, var(--focus)), 0 10px 18px -8px rgba(0,0,0,.55), 0 3px 6px -3px rgba(0,0,0,.35)}
-  /* A small dot under the date: the calendar colour, or the day's readable text
-     colour when it's filled (so it never disappears into the fill). */
-  .day.today::after{content:"";position:absolute;left:50%;bottom:5px;width:5px;height:5px;margin-left:-2.5px;
-    border-radius:50%;background:var(--cal-mark, var(--focus));pointer-events:none}
-  .day.today.filled::after{background:var(--dn, rgba(255,255,255,.92))}
   .day.today .dn{font-weight:700;color:var(--ink)}
   .day.today.filled .dn{color:var(--dn, rgba(255,255,255,.92))}
   .day[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:-1px}
@@ -2863,10 +2858,13 @@ function renderCalendar(){
   var todayKey = key(new Date());
   var goal = state.settings.goal*3600;
   var heat = heatBase();
-  // Today's ring and dot: the calendar colour, lightened/darkened just enough to
-  // stand out (3:1) against the background, e.g. a dark colour in dark mode.
-  var inkC = parseColor(getComputedStyle(document.documentElement).getPropertyValue("--ink")) || [22,33,31];
-  grid.style.setProperty("--cal-mark", rgbStr(readableText(heat.hi, [heat.bg], inkC, 3)));
+  // Today's ring: a shade of the accent -- moved toward the text colour (so
+  // lighter in dark mode, darker in light mode) to stay distinct from the
+  // accent-coloured fills, then nudged further if needed to reach 3:1 contrast.
+  var rootCs = getComputedStyle(document.documentElement);
+  var inkC = parseColor(rootCs.getPropertyValue("--ink")) || [22,33,31];
+  var accC = parseColor(rootCs.getPropertyValue("--focus")) || heat.hi;
+  grid.style.setProperty("--cal-mark", rgbStr(readableText(mixRgb(accC, inkC, 0.35), [heat.bg], inkC, 3)));
 
   // The month's best day gets a crown -- only when something's actually logged.
   var crownK = null, crownS = 0;
