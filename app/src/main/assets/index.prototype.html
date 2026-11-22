@@ -140,6 +140,12 @@
     padding:7px 15px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
   }
   .mode-row button[aria-pressed="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus-text);font-weight:600}
+  /* A thin divider sets Lock in apart from the Pomodoro tabs. */
+  .mode-row .msep{flex:none;width:1px;align-self:stretch;margin:4px 3px;background:var(--line)}
+  /* Narrow cards: "Short" and "Long" so all four tabs stay on one line. */
+  @container clock (max-width:439px){ .mode-row .mb{display:none} }
+  /* Lock in has no Reset (the session just ends). */
+  body.lockin #reset{display:none !important}
 
   /* min(250px, 62vw): full size on anything roomy, but shrinks with the
      viewport on a narrow phone instead of crowding the card edges. */
@@ -937,8 +943,10 @@
       <div class="clockwrap" id="clockwrap">
         <div class="mode-row">
           <button id="m-focus" aria-pressed="true">Focus</button>
-          <button id="m-short" aria-pressed="false">Short break</button>
-          <button id="m-long" aria-pressed="false">Long break</button>
+          <button id="m-short" aria-pressed="false">Short<span class="mb"> break</span></button>
+          <button id="m-long" aria-pressed="false">Long<span class="mb"> break</span></button>
+          <span class="msep" aria-hidden="true"></span>
+          <button id="m-lock" aria-pressed="false" title="Lock in: no timer, no breaks -- it counts up until you end it">Lock in</button>
         </div>
 
         <!-- Grouped so the three stay visually tight together while
@@ -1189,6 +1197,16 @@
   <div class="dialog-actions">
     <button class="ghost" id="confirm-cancel">Cancel</button>
     <button class="primary" id="confirm-ok">Remove</button>
+  </div>
+</dialog>
+
+<!-- Lock in has no pause: stopping ends the session, so ask first. -->
+<dialog id="dlg-lockend">
+  <h2>End lock-in?</h2>
+  <p class="hint" id="lockend-body"></p>
+  <div class="dialog-actions">
+    <button class="ghost" id="lockend-keep">Keep going</button>
+    <button class="primary" id="lockend-ok">End</button>
   </div>
 </dialog>
 
@@ -2122,7 +2140,7 @@ var state = {
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
             showGoal:true, showCycle:true, countdownDate:"", calColor:"",
-            scene:"none", sceneDrive:"goal", sceneMotion:true, sceneClock:"minimal"},
+            scene:"none", sceneDrive:"goal", sceneMotion:true, sceneClock:"minimal", lockBest:0},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
   // Logged time lives in `log` (see the ledger section): per day, one record
@@ -2613,7 +2631,7 @@ function mirrorRun(run){
   remaining = Math.max(0, (run.end - Date.now())/1000);
   blockCommitted = blockLen - remaining;   // the runner logs this block, not us
   running = false;
-  document.body.classList.toggle("rest", mode !== "focus");
+  setModeClass(mode);
   lastTick = Date.now();
   saveLiveTimer();
 }
@@ -2636,7 +2654,7 @@ function adoptPaused(t){
   // The device that ran this block already logged its time into its own
   // record, so treat it as fully banked here: adopting must never re-log it.
   blockCommitted = Math.max(+t.committed || 0, blockLen - remaining);
-  document.body.classList.toggle("rest", mode !== "focus");
+  setModeClass(mode);
   lastTick = Date.now();
   saveLiveTimer();
 }
@@ -2882,8 +2900,56 @@ var lastRunSave = 0;
    in-progress session -- you can tab away and back and it's still there. */
 var remainingByMode = {};
 
+/* Lock in: no timer, no breaks. It's one long focus block that counts UP and
+   ends when you end it (there's no pause), so the time it logs, syncs and hands
+   to the Android service all goes through the same path as a focus block. The
+   block is LOCKIN_CAP long under the hood; the display shows elapsed time. */
+var LOCKIN_CAP = 12*3600;
+function focusLike(m){ return m === "focus" || m === "lockin"; }
+function setModeClass(m){
+  document.body.classList.toggle("rest", !focusLike(m));
+  document.body.classList.toggle("lockin", m === "lockin");
+}
+function lockElapsed(){ return Math.max(0, Math.min(blockLen, blockLen - remaining)); }
+// "1h 12m", "24m", "45s"
+function fmtDur(secs){
+  secs = Math.round(secs);
+  if(secs < 60) return secs + "s";
+  var h = Math.floor(secs/3600), m = Math.floor(secs%3600/60);
+  return h ? h + "h " + m + "m" : m + "m";
+}
+// A count-up clock: 12:34, or 1:02:34 past the hour.
+function fmtElapsed(secs){
+  secs = Math.floor(secs);
+  var h = Math.floor(secs/3600), m = Math.floor(secs%3600/60), s = secs%60;
+  return h ? h + ":" + pad(m) + ":" + pad(s) : pad(m) + ":" + pad(s);
+}
+// A lock-in just ended after `secs`: keep the longest (synced with settings).
+function lockInEnded(secs){
+  if(secs < 60) return;
+  var best = +state.settings.lockBest || 0;
+  if(secs > best){
+    state.settings.lockBest = Math.round(secs);
+    note(best ? "New longest lock-in: " + fmtDur(secs) + "." : "Locked in for " + fmtDur(secs) + ". That's your record to beat.");
+  }else{
+    note("Locked in for " + fmtDur(secs) + ".");
+  }
+}
+// The Start/End button (and Space): ending a lock-in asks first.
+function startStop(){
+  if(running && mode === "lockin"){
+    document.getElementById("lockend-body").textContent =
+      "You've been locked in for " + fmtDur(lockElapsed()) + ". Ending stops the session; the time is already saved." +
+      ((+state.settings.lockBest || 0) > lockElapsed() ? " Your longest is " + fmtDur(+state.settings.lockBest) + "." : "");
+    document.getElementById("dlg-lockend").showModal();
+    return;
+  }
+  toggle();
+}
+
 function modeSeconds(m){
   if(m === "focus") return state.settings.focus*60;
+  if(m === "lockin") return LOCKIN_CAP;
   if(m === "shortBreak") return state.settings.shortBreak*60;
   return state.settings.longBreak*60;
 }
@@ -2896,7 +2962,7 @@ function setMode(m, autostart){
   blockLen = modeSeconds(m);
   blockCommitted = 0;   // fresh block, nothing banked yet
   delete remainingByMode[m];   // a genuinely fresh block, drop any stash
-  document.body.classList.toggle("rest", m !== "focus");
+  setModeClass(m);
   running = !!autostart;
   lastTick = Date.now();
   nativeSync();
@@ -2913,7 +2979,7 @@ function selectMode(m){
   touchTimer();
   remainingByMode[mode] = {remaining:remaining, committed:blockCommitted, len:blockLen};
   mode = m;
-  document.body.classList.toggle("rest", m !== "focus");
+  setModeClass(m);
   var saved = remainingByMode[m];
   remaining = saved ? saved.remaining : modeSeconds(m);
   blockCommitted = saved ? saved.committed : 0;
@@ -2924,6 +2990,8 @@ function selectMode(m){
   renderClock(); renderModeButtons();
 }
 function toggle(){
+  // Lock in has no pause: a pause request (e.g. from the notification) ends it.
+  if(running && mode === "lockin"){ endBlock(); return; }
   if(running){
     // Pausing: flush the time accrued since the last tick BEFORE stopping,
     // so nothing between the last tick and this pause is lost. tick() only
@@ -2940,7 +3008,7 @@ function toggle(){
     // A focus block logs against the active category, so there has to be one.
     // A brand-new user has none yet -- send them to add their first instead of
     // silently starting a block whose time has nowhere to go.
-    if(mode === "focus" && !state.categories.filter(function(c){return !c.archived;}).length){
+    if(focusLike(mode) && !state.categories.filter(function(c){return !c.archived;}).length){
       note("Add a category to study against.");
       openCats();
       var ni = document.getElementById("newcat"); if(ni) ni.focus();
@@ -2976,7 +3044,7 @@ function resetBlock(){
 }
 function endBlock(){
   if(mirror) return;   // another device is running this block; it ends it
-  if(mode === "focus" && !running && remaining >= blockLen) return;
+  if(focusLike(mode) && !running && remaining >= blockLen) return;
   touchTimer();
   // Flush the delta since the last tick (a running block hasn't ticked in up
   // to 250ms) and bank the ACTUAL elapsed before ending -- so ending a block
@@ -3002,7 +3070,7 @@ function endBlock(){
    makes a plain Pause -- or just leaving and coming back -- credit the time
    with no need to press End block. */
 function commitElapsed(){
-  if(mode !== "focus") return;
+  if(!focusLike(mode)) return;
   var elapsed = blockLen - Math.max(0, remaining);
   var add = elapsed - blockCommitted;
   if(add <= 0) return;
@@ -3056,6 +3124,17 @@ function blockFinished(){
   // The page has just accounted for this block itself; if the service also
   // recorded it as finished, that record must not be credited again later.
   ackService();
+  if(mode === "lockin"){
+    // Ended by you (End), or it ran into the 12-hour cap. Only the cap is a
+    // surprise worth a chime and an alert; ending it yourself is quiet.
+    var lockSecs = blockCommitted;
+    if(lockSecs >= LOCKIN_CAP - 1){ chime(); nativeDone(mode); }
+    lockInEnded(lockSecs);
+    setMode("lockin", false);
+    save(true);
+    renderAll();
+    return;
+  }
   chime();
   nativeDone(mode);
   if(mode === "focus"){
@@ -3078,7 +3157,7 @@ function chime(){
     [0,0.18,0.36].forEach(function(off,i){
       var o = audioCtx.createOscillator(), g = audioCtx.createGain();
       o.type = "sine";
-      o.frequency.value = mode === "focus" ? [660,880,990][i] : [520,440,392][i];
+      o.frequency.value = focusLike(mode) ? [660,880,990][i] : [520,440,392][i];
       g.gain.setValueAtTime(0.0001, t0+off);
       g.gain.exponentialRampToValueAtTime(0.22, t0+off+0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, t0+off+0.16);
@@ -3098,6 +3177,7 @@ var nativeLive = false;
    shows on the page itself; the notification stays uncluttered. */
 function labelFor(m){
   if(m === "focus") return "Focus";
+  if(m === "lockin") return "Lock in";
   return m === "shortBreak" ? "Short break" : "Long break";
 }
 function modeLabel(){ return labelFor(mode); }
@@ -3105,6 +3185,7 @@ function modeLabel(){ return labelFor(mode); }
 /* One block of lookahead for the service, using the same rule blockFinished
    uses, so both sides land on the same next block. */
 function nextBlock(){
+  if(mode === "lockin") return { label: "", ms: 0 };   // nothing follows a lock-in
   var m;
   if(mode === "focus"){
     var done = state.completed + 1;
@@ -3172,7 +3253,7 @@ function restoreLiveTimer(){
     blockLen = s.len || modeSeconds(mode);
     runAt = s.runAt || 0;
     runSegs = Array.isArray(s.segs) ? s.segs : [];
-    document.body.classList.toggle("rest", mode !== "focus");
+    setModeClass(mode);
     if(s.running && s.endTime){
       running = true;
       remaining = Math.max(0, (s.endTime - Date.now())/1000);
@@ -3195,6 +3276,12 @@ function restoreLiveTimer(){
 function nativeSync(){
   saveLiveTimer();
   if(!NATIVE) return;
+  // A lock-in that isn't running has nothing to show: drop the notification
+  // (but keep the local snapshot, so the Lock in tab stays selected).
+  if(mode === "lockin" && !running){
+    if(nativeLive){ try{ window.AndroidTimer.stopTimer(); }catch(e){} nativeLive = false; }
+    return;
+  }
   try{
     if(running){
       var end = Date.now() + Math.max(0, remaining)*1000;
@@ -3225,8 +3312,9 @@ function nativeStop(){
 function nativeDone(finishedMode){
   if(!NATIVE) return;
   try{
-    var title = finishedMode === "focus" ? "Focus block done" : "Break over";
-    var body = finishedMode === "focus"
+    var title = finishedMode === "lockin" ? "Lock-in ended" : finishedMode === "focus" ? "Focus block done" : "Break over";
+    var body = finishedMode === "lockin" ? "12 hours locked in. Today: " + fmtHM(daySeconds(key(new Date())))
+      : finishedMode === "focus"
       ? "Time for a break. Today: " + fmtHM(daySeconds(key(new Date())))
       : "Back to " + catName(state.activeCat) + ".";
     window.AndroidTimer.blockDone(title, body);
@@ -3359,7 +3447,7 @@ function stepScene(){
   var moving = sceneDrop || Math.abs(t - sceneShown) > 0.002;
   sceneInst.update({
     p: scenePreview !== null ? scenePreview : sceneShown,
-    mode: mode === "focus" ? "focus" : "break",
+    mode: focusLike(mode) ? "focus" : "break",
     running: running,
     motion: state.settings.sceneMotion !== false && !reduceMotion
   });
@@ -3527,8 +3615,10 @@ function renderClock(){
   var sig = style + "|" + (state.settings.analogStyle||"ticks") + "|" + (state.settings.digitStyle||"plain");
   if(faceBuilt !== sig) buildFace(style);
 
+  var lock = mode === "lockin";
   var secs = Math.max(0, Math.ceil(remaining));
-  var label = pad(Math.floor(secs/60))+":"+pad(secs%60);
+  // Lock in counts up; everything else counts down.
+  var label = lock ? fmtElapsed(lockElapsed()) : pad(Math.floor(secs/60))+":"+pad(secs%60);
 
   var digits = document.getElementById("digits");
   digits.textContent = label;
@@ -3538,7 +3628,7 @@ function renderClock(){
   if(document.body.classList.contains("scene") && fsOn){
     var paused = !running && remaining < (blockLen || modeSeconds(mode)) - 0.5;
     document.getElementById("sc-lbl").textContent =
-      (mode === "focus" ? "Focus" : mode === "shortBreak" ? "Short break" : "Long break") + (paused ? " · Paused" : "");
+      labelFor(mode) + (paused && !lock ? " · Paused" : "");
     document.getElementById("sc-t").textContent = label;
     var todayRec = state.days[key(new Date())] || {}, todaySecs = 0, goalSecs = Math.max(1, state.settings.goal*3600);
     for(var tc in todayRec) todaySecs += todayRec[tc];
@@ -3548,6 +3638,12 @@ function renderClock(){
 
   var total = blockLen || modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
+  // Lock in: the ring runs down toward your longest lock-in (or an hour, before
+  // you have one), and is empty once you've matched it.
+  if(lock){
+    var ref = (+state.settings.lockBest || 0) >= 60 ? +state.settings.lockBest : 3600;
+    frac = Math.max(0, 1 - lockElapsed()/ref);
+  }
   // Elapsed share. The ring keeps only what is left, starting where the hand is,
   // so both empty clockwise from twelve.
   var used = 1 - frac;
@@ -3568,7 +3664,8 @@ function renderClock(){
   // "Resume" for a paused block that's partway through; "Start" only for a
   // fresh block (nothing elapsed yet).
   document.getElementById("startstop").textContent =
-    running ? "Pause" : mirror ? "Continue here" : (remaining < blockLen - 0.5) ? "Resume" : "Start";
+    lock ? (running ? "End" : mirror ? "Continue here" : "Start")
+    : running ? "Pause" : mirror ? "Continue here" : (remaining < blockLen - 0.5) ? "Resume" : "Start";
   // Another device is running the timer: say so, and leave only "Continue
   // here" (Reset/End would act on a block this device isn't running).
   var mn = document.getElementById("mirrornote");
@@ -3578,7 +3675,9 @@ function renderClock(){
   }else mn.hidden = true;
   document.getElementById("reset").hidden = !!mirror;
   var eb = document.getElementById("endblock");
-  if(mode === "focus"){
+  if(lock){
+    eb.style.display = "none";      // the main button ends a lock-in
+  }else if(mode === "focus"){
     eb.textContent = "End block";
     eb.style.display = (running || remaining < blockLen) ? "" : "none";
   }else{
@@ -3587,12 +3686,17 @@ function renderClock(){
   }
   if(mirror) eb.style.display = "none";
   renderGoalBar();
-  var done = state.completed % state.settings.cycles;
-  document.getElementById("cyclenote").textContent =
-    "Session " + (done+1) + " of " + state.settings.cycles;
-  document.getElementById("cyclenote").title = "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
+  var done = state.completed % state.settings.cycles, cn = document.getElementById("cyclenote");
+  if(lock){
+    var best = +state.settings.lockBest || 0;
+    cn.textContent = best >= 60 ? "Longest: " + fmtDur(best) : "No lock-in yet";
+    cn.title = "Your longest lock-in";
+  }else{
+    cn.textContent = "Session " + (done+1) + " of " + state.settings.cycles;
+    cn.title = "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
+  }
   document.title = (running ? label + " " : "") +
-    (mode === "focus" ? "Focus" : "Break") + " \u00b7 Study Clock";
+    (lock ? "Lock in" : mode === "focus" ? "Focus" : "Break") + " · Study Clock";
 }
 function renderGoalBar(){
   var k = key(new Date());
@@ -3646,6 +3750,7 @@ function renderModeButtons(){
   document.getElementById("m-focus").setAttribute("aria-pressed", mode==="focus");
   document.getElementById("m-short").setAttribute("aria-pressed", mode==="shortBreak");
   document.getElementById("m-long").setAttribute("aria-pressed", mode==="longBreak");
+  document.getElementById("m-lock").setAttribute("aria-pressed", mode==="lockin");
 }
 
 /* ---------- full screen ---------- */
@@ -4847,7 +4952,7 @@ document.getElementById("day-clear").addEventListener("click", function(){
 });
 
 /* ---------- wiring ---------- */
-document.getElementById("startstop").addEventListener("click", toggle);
+document.getElementById("startstop").addEventListener("click", startStop);
 document.getElementById("reset").addEventListener("click", resetBlock);
 document.getElementById("endblock").addEventListener("click", endBlock);
 /* A running block only stops by actually being stopped/reset/finished -
@@ -4857,6 +4962,12 @@ document.getElementById("endblock").addEventListener("click", endBlock);
 document.getElementById("m-focus").addEventListener("click", function(){ selectMode("focus"); });
 document.getElementById("m-short").addEventListener("click", function(){ selectMode("shortBreak"); });
 document.getElementById("m-long").addEventListener("click", function(){ selectMode("longBreak"); });
+document.getElementById("m-lock").addEventListener("click", function(){ selectMode("lockin"); });
+document.getElementById("lockend-keep").addEventListener("click", function(){ document.getElementById("dlg-lockend").close(); });
+document.getElementById("lockend-ok").addEventListener("click", function(){
+  document.getElementById("dlg-lockend").close();
+  if(running && mode === "lockin") endBlock();
+});
 document.getElementById("themebtn").addEventListener("click", cycleTheme);
 document.getElementById("fsbtn").addEventListener("click", function(){ setFullscreen(true); });
 document.getElementById("exitfs").addEventListener("click", function(){ setFullscreen(false); });
@@ -4935,8 +5046,8 @@ document.addEventListener("keydown", function(e){
     if(e.key === "Enter" && selectedDay){ e.preventDefault(); openDayEditor(selectedDay); return; }
     if(e.key === "Escape" && selectedDay){ e.preventDefault(); selectedDay = null; renderCalendar(); renderBreakdown(); return; }
   }
-  if(e.code === "Space"){ e.preventDefault(); toggle(); }
-  else if(e.key === "r" || e.key === "R"){ resetBlock(); }
+  if(e.code === "Space"){ e.preventDefault(); startStop(); }
+  else if((e.key === "r" || e.key === "R") && mode !== "lockin"){ resetBlock(); }   // Lock in has no Reset
   else if(e.key === "f" || e.key === "F"){ setFullscreen(!fsOn); }
   else if(e.key === "Escape" && fsOn){ setFullscreen(false); }
 });
@@ -4975,7 +5086,7 @@ window.__closeTopDialog = function(){
    true and adopt that instead of trusting this page's own possibly-stale
    mode/running/remaining. Only those three adopt; state.* (stats, tasks,
    categories) is untouched, so nothing here risks double-counting time. */
-function labelMode(l){ return l === "Short break" ? "shortBreak" : l === "Long break" ? "longBreak" : "focus"; }
+function labelMode(l){ return l === "Short break" ? "shortBreak" : l === "Long break" ? "longBreak" : l === "Lock in" ? "lockin" : "focus"; }
 /* Returns true if the service had a timer to adopt.
    This used to adopt only the service's CURRENT block. But when a focus block
    ends while the app is backgrounded, the service rolls straight on to the
@@ -4999,12 +5110,14 @@ function adoptNativeState(){
   var from = (liveSid !== null && liveSid === s.sid) ? liveSeq : 0;
   var done = (Array.isArray(s.done) ? s.done : []).filter(function(e){ return e.seq > from; });
   done.forEach(function(e, i){
-    if(labelMode(e.label) !== "focus") return;
+    var em = labelMode(e.label);
+    if(!focusLike(em)) return;
     // The first is the block this page was on: only its unbanked part counts.
-    var banked = (i === 0 && lv && lv.mode === "focus") ? (lv.committed || 0) : 0;
+    var banked = (i === 0 && lv && lv.mode === em) ? (lv.committed || 0) : 0;
     var add = (+e.elapsed || 0)/1000 - banked;
     if(add > 0) bankAt(+e.end || Date.now(), add);
-    state.completed++;
+    // A lock-in isn't a Pomodoro session: it doesn't count toward the long break.
+    if(em === "lockin") lockInEnded((+e.elapsed || 0)/1000); else state.completed++;
   });
   liveSeq = s.seq || 0;
   liveSid = s.sid || null;
@@ -5018,7 +5131,7 @@ function adoptNativeState(){
 
   // Now the block the service is on.
   mode = labelMode(s.label);
-  document.body.classList.toggle("rest", mode !== "focus");
+  setModeClass(mode);
   var same = !done.length && lv && lv.mode === mode;
   blockCommitted = same ? (lv.committed || 0) : 0;
   // The page's own length for a block it knows; the service's only for a block
@@ -5041,7 +5154,7 @@ function adoptNativeState(){
   commitElapsed();
   if(spent){
     // Move on to the next block, paused, as the page would have.
-    var next = mode !== "focus" ? "focus"
+    var next = mode === "lockin" ? "lockin" : mode !== "focus" ? "focus"
       : (state.completed % state.settings.cycles === 0) ? "longBreak" : "shortBreak";
     setMode(next, false);
   }else if(!s.paused && remaining <= 0){

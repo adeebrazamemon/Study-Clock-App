@@ -234,8 +234,8 @@ public class TimerService extends Service {
     private void onBlockEnd() {
         if (paused) return;
         if (System.currentTimeMillis() < endTime) return;
-        alertFinished(this, label + " done",
-                nextLabel != null ? "Next: " + nextLabel : "Session finished.");
+        alertFinished(this, isLockIn() ? "Lock-in ended" : label + " done",
+                nextLabel != null && !nextLabel.isEmpty() ? "Next: " + nextLabel : "Session finished.");
         // It ran its whole length, ending at endTime (not now: this alarm can
         // fire late under Doze, and that lag isn't study time).
         recordDone(totalMs, endTime);
@@ -373,20 +373,26 @@ public class TimerService extends Service {
                 // show a normal ongoing notification.
                 .setRequestPromotedOngoing(true);
 
-        // Android draws and ticks the countdown; nothing here runs per second.
+        // Lock in counts UP from when it started, has no progress bar, and its
+        // only button is End (it has no pause).
+        boolean lock = isLockIn();
+
+        // Android draws and ticks the clock; nothing here runs per second.
         if (!paused && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             b.setUsesChronometer(true);
-            b.setChronometerCountDown(true);
-            b.setWhen(endTime);
+            b.setChronometerCountDown(!lock);
+            // endTime - totalMs is when the lock-in started (the page hands over
+            // the remaining time against its full, fixed length).
+            b.setWhen(lock ? endTime - totalMs : endTime);
         }
         if (paused) {
             b.setShowWhen(false);
-            b.setContentText(pausedRemaining > 0
-                    ? "Paused at " + mmss(pausedRemaining)
+            b.setContentText(lock ? "Lock-in ended"
+                    : pausedRemaining > 0 ? "Paused at " + mmss(pausedRemaining)
                     : "Block finished");
         }
 
-        if (totalMs > 0) {
+        if (totalMs > 0 && !lock) {
             // setStyledByProgress(false) -- what the previous two attempts
             // both had -- explicitly tells the OS *not* to visually
             // distinguish behind-progress from ahead-of-progress at all, so
@@ -416,16 +422,26 @@ public class TimerService extends Service {
                     .setProgress(remainingSec));
         }
 
-        b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
-        b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
-        b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
+        if (lock) {
+            // Ending a lock-in records it exactly like Skip does for a block
+            // (elapsed so far, then nothing queued), so it reuses that action.
+            if (!paused) b.addAction(0, "End", servicePi(ACTION_SKIP, 11));
+        } else {
+            b.addAction(0, paused ? "Resume" : "Pause", servicePi(ACTION_TOGGLE, 10));
+            b.addAction(0, "Skip", servicePi(ACTION_SKIP, 11));
+            b.addAction(0, "Stop", servicePi(ACTION_STOP, 12));
+        }
 
         return b.build();
     }
 
-    /* label is always exactly "Focus", "Short break", or "Long break" (see
-       labelFor() in index.html), so this string check is safe rather than
-       fragile. Both break lengths share one color; only focus differs. */
+    /* label is always exactly "Focus", "Short break", "Long break" or "Lock in"
+       (see labelFor() in index.html), so these string checks are safe rather
+       than fragile. Both break lengths share one color; focus differs. */
+    private boolean isLockIn() {
+        return "Lock in".equals(label);
+    }
+
     private int progressColor() {
         return getColor("Focus".equals(label) ? R.color.ink : R.color.progress_break);
     }
