@@ -273,7 +273,12 @@
 
   /* ---------- calendar ---------- */
   .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  .calhead .month{font-size:15.5px;font-weight:600}
+  /* The month name is a button (whole-month stats): raised just a little so it
+     reads as tappable. */
+  .calhead .month{font-size:15.5px;font-weight:600;color:var(--ink);font-family:inherit;cursor:pointer;
+    padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);
+    box-shadow:0 2px 6px -2px rgba(0,0,0,.3);transition:transform .15s, box-shadow .15s}
+  .calhead .month:hover{transform:translateY(-1px);box-shadow:0 4px 10px -3px rgba(0,0,0,.35)}
   .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
   .dow span{text-align:center;font-size:12px;color:var(--muted)}
   .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
@@ -287,8 +292,13 @@
   .day.blank{border:none;background:none;cursor:default}
   .day .dn{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
   .day.filled .dn{color:var(--dn, rgba(255,255,255,.9));font-weight:600}
-  .day.today{outline:2px solid var(--ink);outline-offset:-1px}
-  .day[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink) inset}
+  /* Today pops out (raised, a touch larger); the ring marks only the day being
+     looked at -- it starts on today and follows your selection. */
+  .day.today{transform:scale(1.07);z-index:1;font-weight:700;
+    box-shadow:0 8px 18px -6px rgba(0,0,0,.5), 0 0 0 1px color-mix(in srgb, var(--ink) 28%, transparent)}
+  .day.today:not(.filled){background:color-mix(in srgb, var(--surface) 86%, var(--ink))}
+  .day.today .dn{font-weight:700}
+  .day[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:-1px}
 
   .breakdown{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
   .bd-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
@@ -683,7 +693,7 @@
     button,.chip,.day,.task,.ovpill,.stat{transition:background-color .15s, border-color .15s, color .15s, transform .12s, box-shadow .15s}
     button:active:not(:disabled){transform:scale(.97)}
     .day:not(.blank):hover{transform:translateY(-1px);box-shadow:0 3px 10px -4px rgba(0,0,0,.25)}
-    .day[aria-pressed="true"]{transform:scale(1.04)}
+    .day.today:not(.blank):hover{transform:scale(1.07) translateY(-1px)}
     .card{transition:box-shadow .2s}
   }
 </style>
@@ -725,7 +735,7 @@
     <section class="card" id="calcard">
       <div class="calhead">
         <button class="iconbtn" id="prev" aria-label="Previous month">&#8249;</button>
-        <div class="month" id="monthlabel">September 2026</div>
+        <button type="button" class="month" id="monthlabel" title="Show the whole month">September 2026</button>
         <button class="iconbtn" id="next" aria-label="Next month">&#8250;</button>
       </div>
       <div class="dow"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
@@ -2836,7 +2846,9 @@ function readableOn(c){
 }
 
 function renderCalendar(){
-  document.getElementById("monthlabel").textContent = monthName(viewY, viewM);
+  // Month only on the calendar; the year appears only for other years.
+  document.getElementById("monthlabel").textContent = new Date(viewY, viewM, 1).toLocaleDateString(undefined,
+    viewY === new Date().getFullYear() ? {month:"long"} : {month:"long", year:"numeric"});
   var grid = document.getElementById("grid");
   grid.innerHTML = "";
   var first = new Date(viewY, viewM, 1);
@@ -3036,7 +3048,9 @@ function fillSettingsInputs(){
   document.getElementById("in-showcycle").checked = state.settings.showCycle !== false;
   document.getElementById("in-accent-custom").value = state.settings.accentColor || "#1F6F5C";
   syncCalColorInput();
-  document.getElementById("in-cd-date").value = state.settings.countdownDate || "";
+  var cdIn = document.getElementById("in-cd-date");
+  cdIn.min = tomorrowKey();   // the countdown is to a future day: tomorrow at the earliest
+  cdIn.value = state.settings.countdownDate || "";
   document.getElementById("cd-datetext").textContent = state.settings.countdownDate ? fmtDMY(state.settings.countdownDate) : "none";
   syncAccentSwatches();
 }
@@ -3143,7 +3157,8 @@ document.getElementById("set-save").addEventListener("click", function(){
   state.settings.goal       = num("in-goal",0.5,16,state.settings.goal);
   state.settings.auto  = document.getElementById("in-auto").checked;
   state.settings.sound = document.getElementById("in-sound").checked;
-  state.settings.countdownDate = document.getElementById("in-cd-date").value;
+  var cdv = document.getElementById("in-cd-date").value;
+  if(!cdv || cdv >= tomorrowKey()) state.settings.countdownDate = cdv;   // never save a past/today date
   if(wasFresh){ remaining = modeSeconds(mode); blockLen = modeSeconds(mode); }
   save(true); dlgSettings.close(); renderAll();
 });
@@ -3291,7 +3306,13 @@ document.getElementById("open-manual").addEventListener("click", function(){
 document.getElementById("man-date").addEventListener("change", function(){
   document.getElementById("man-datetext").textContent = fmtDMY(this.value);
 });
+function tomorrowKey(){ var d = new Date(); d.setDate(d.getDate() + 1); return key(d); }
 document.getElementById("in-cd-date").addEventListener("change", function(){
+  // The picker greys out earlier days, but a typed date can still get through.
+  if(this.value && this.value < tomorrowKey()){
+    this.value = state.settings.countdownDate && state.settings.countdownDate >= tomorrowKey() ? state.settings.countdownDate : "";
+    note("Pick a day from tomorrow onward.");
+  }
   document.getElementById("cd-datetext").textContent = this.value ? fmtDMY(this.value) : "none";
 });
 document.getElementById("cd-clear").addEventListener("click", function(){
@@ -3537,6 +3558,10 @@ document.getElementById("next").addEventListener("click", function(){
   viewM++; if(viewM>11){ viewM=0; viewY++; }
   selectedDay = null; renderStats(); renderCalendar(); renderBreakdown();
 });
+// The month name shows the whole month's breakdown (no day selected).
+document.getElementById("monthlabel").addEventListener("click", function(){
+  selectedDay = null; renderCalendar(); renderBreakdown();
+});
 Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){
   b.addEventListener("click", function(){ showPage(b.getAttribute("data-page")); });
 });
@@ -3719,6 +3744,7 @@ rememberFields();   // baseline, so the very first local change gets stamped
 initSync();
 var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
+selectedDay = key(now0);   // the ring starts on today and follows the selection
 remaining = modeSeconds("focus");
 blockLen = modeSeconds("focus");
 lastTick = Date.now();
