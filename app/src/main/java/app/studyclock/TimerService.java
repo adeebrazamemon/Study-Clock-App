@@ -79,6 +79,37 @@ public class TimerService extends Service {
     /** Full length of the block in progress, for the notification's progress bar. */
     private long totalMs = 0L;
 
+    /**
+     * Blocks this service finished on its own (ran out, or Skip on the
+     * notification), oldest first, each numbered by seq. The page only learns
+     * about the CURRENT block from snapshotJson(), so without this a focus block
+     * that ended while the app was backgrounded rolled into the break and the
+     * page never logged the rest of it. The page credits each entry once,
+     * remembering the last seq it handled.
+     */
+    private static final int MAX_DONE = 8;
+    private final java.util.ArrayList<JSONObject> done = new java.util.ArrayList<>();
+    private long seq = 0L;
+    /** Identifies this service instance. seq restarts at 0 whenever the service
+     *  is recreated, so the page tracks "last seq handled" per instance. */
+    private final long sid = System.currentTimeMillis();
+
+    private void recordDone(long elapsedMs, long endAt) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("label", label);
+            o.put("elapsed", Math.max(0L, Math.min(elapsedMs, totalMs > 0 ? totalMs : elapsedMs)));
+            o.put("end", endAt);
+            synchronized (done) {
+                o.put("seq", ++seq);
+                done.add(o);
+                while (done.size() > MAX_DONE) done.remove(0);
+            }
+        } catch (JSONException ignored) {
+            // Nothing sensible to do; the page falls back to the current block.
+        }
+    }
+
     public static boolean isRunning() {
         return instance != null;
     }
@@ -97,6 +128,16 @@ public class TimerService extends Service {
         s.paused = false;
         s.pausedRemaining = 0L;
         s.scheduleEnd();
+        s.post();
+    }
+
+    /** The paused/queued block's full length. pause() alone leaves the previous
+     *  block's totalMs in place, so a block resumed from the notification would
+     *  be recorded with the wrong length. */
+    public static void setTotal(long totalMs) {
+        TimerService s = instance;
+        if (s == null || totalMs <= 0L) return;
+        s.totalMs = totalMs;
         s.post();
     }
 
@@ -158,7 +199,10 @@ public class TimerService extends Service {
             // and category time, state.completed, ...) naturally supersedes
             // this simpler guess when it calls startTimer/updateRunning.
             cancelEnd();
-            advanceQueued();
+            long now = System.currentTimeMillis();
+            long left = paused ? pausedRemaining : Math.max(0L, endTime - now);
+            recordDone(totalMs - left, now);
+            advanceQueued(now);
             if (listener != null) listener.onCommand("skip");
 
         } else if (ACTION_BLOCK_END.equals(action)) {
@@ -192,7 +236,10 @@ public class TimerService extends Service {
         if (System.currentTimeMillis() < endTime) return;
         alertFinished(this, label + " done",
                 nextLabel != null ? "Next: " + nextLabel : "Session finished.");
-        advanceQueued();
+        // It ran its whole length, ending at endTime (not now: this alarm can
+        // fire late under Doze, and that lag isn't study time).
+        recordDone(totalMs, endTime);
+        advanceQueued(endTime);
     }
 
     /**
@@ -201,7 +248,7 @@ public class TimerService extends Service {
      * alertFinished: it is a deliberate foreground action, so it just updates
      * the notification quietly rather than also firing a heads-up alert.
      */
-    private void advanceQueued() {
+    private void advanceQueued(long startAt) {
         if (nextLabel == null || nextMs <= 0L) {
             // Nothing queued, so stop counting rather than run into negative time.
             paused = true;
@@ -220,7 +267,10 @@ public class TimerService extends Service {
         totalMs = queuedMs;
 
         if (auto) {
-            endTime = System.currentTimeMillis() + queuedMs;
+            // From when the previous block really ended, not from whenever this
+            // ran (a late alarm). If that's already past, the next alarm fires
+            // straight away and records this block as finished too.
+            endTime = startAt + queuedMs;
             paused = false;
             scheduleEnd();
         } else {
@@ -245,6 +295,16 @@ public class TimerService extends Service {
             o.put("endTime", s.endTime);
             o.put("pausedRemaining", s.pausedRemaining);
             o.put("totalMs", s.totalMs);
+            // getServiceState runs on the WebView's bridge thread, while
+            // recordDone runs on the main thread: hold the list's lock, and
+            // read seq under it too so the two always agree.
+            org.json.JSONArray arr = new org.json.JSONArray();
+            o.put("sid", s.sid);
+            synchronized (s.done) {
+                o.put("seq", s.seq);
+                for (JSONObject e : s.done) arr.put(e);
+            }
+            o.put("done", arr);
             return o.toString();
         } catch (JSONException e) {
             return null;

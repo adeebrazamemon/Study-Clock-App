@@ -141,6 +141,19 @@ public class MainActivity extends AppCompatActivity {
         c.hide(WindowInsetsCompat.Type.systemBars());
     }
 
+    /** Every return to the foreground: have the page reconcile with the timer
+     *  service (credit any blocks it finished while we were backgrounded).
+     *  The page used to rely on the DOM visibilitychange event for this, which
+     *  an Android WebView doesn't reliably fire. Before the page has loaded the
+     *  hook doesn't exist yet and this is a no-op. */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) {
+            web.evaluateJavascript("window.__nativeResume && window.__nativeResume();", null);
+        }
+    }
+
     /** Android tends to let the system bars creep back after the window
      *  loses and regains focus (backgrounding, a permission dialog, the
      *  keyboard) -- re-hide them whenever focus returns. */
@@ -301,6 +314,17 @@ public class MainActivity extends AppCompatActivity {
             final long remaining = parsed;
             runOnUiThread(new Runnable() {
                 @Override public void run() { TimerService.pause(remaining, label); }
+            });
+        }
+
+        /** Length of the paused/queued block (see TimerService.setTotal). */
+        @JavascriptInterface
+        public void setTotal(final String totalMs) {
+            long parsed;
+            try { parsed = Long.parseLong(totalMs); } catch (Exception e) { parsed = 0L; }
+            final long total = parsed;
+            runOnUiThread(new Runnable() {
+                @Override public void run() { TimerService.setTotal(total); }
             });
         }
 

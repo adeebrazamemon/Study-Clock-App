@@ -14,7 +14,7 @@
 <style>
   /* ---------- theme tokens ---------- */
   :root{
-    --bg:#E9EDEC; --surface:#FFFFFF; --ink:#16211F; --muted:#5F706C;
+    --bg:#E9EDEC; --surface:#FFFFFF; --ink:#16211F; --muted:#53625D;
     --line:#D3DBD9; --focus:#1F6F5C; --focus-soft:#DCEAE5;
     --rest:#43648F; --rest-soft:#DEE6EF; --warn:#9C4B2A;
     --heat-lo:220,234,229; --heat-hi:22,86,71;
@@ -22,6 +22,10 @@
     /* Accent used as *text*: blended toward --ink so it stays readable
        against the surface no matter how dark or light the accent is. */
     --focus-text:color-mix(in srgb, var(--focus) 60%, var(--ink));
+    /* Fallbacks only: applyTheme() replaces these three with colours computed
+       to meet 4.5:1 contrast on the current surface (see readableText). */
+    --rest-text:color-mix(in srgb, var(--rest) 60%, var(--ink));
+    --warn-text:color-mix(in srgb, var(--warn) 60%, var(--ink));
   }
   .dark-tokens{}
   :root[data-theme="dark"]{
@@ -76,6 +80,10 @@
   .swatch-custom::-webkit-color-swatch{border:none;border-radius:6px}
 
   *{box-sizing:border-box}
+  /* `hidden` must always win: a component's own display (e.g. .ovpill's flex)
+     otherwise overrides the browser's default, which is how an empty "Days
+     left" pill showed with no date set. */
+  [hidden]{display:none !important}
   html,body{margin:0;padding:0;height:100%}
   body{
     background:var(--bg); color:var(--ink);
@@ -83,7 +91,7 @@
     font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
     overscroll-behavior-y:none;
   }
-  body.rest{--focus:var(--rest);--focus-soft:var(--rest-soft)}
+  body.rest{--focus:var(--rest);--focus-soft:var(--rest-soft);--focus-text:var(--rest-text)}
 
   /* env(safe-area-inset-*) is 0 anywhere it doesn't apply (the web, an
      older non-edge-to-edge Android build) so this is additive, never a
@@ -259,8 +267,8 @@
   .stat .n{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .stat .l{color:var(--muted);font-size:12.5px;margin-top:2px}
   .stat .trend{font-size:11px;margin-top:4px;font-weight:600;line-height:1.3}
-  .stat .trend.up{color:var(--focus)}
-  .stat .trend.down{color:var(--warn)}
+  .stat .trend.up{color:var(--focus-text)}
+  .stat .trend.down{color:var(--warn-text)}
   .stat .trend.flat{color:var(--muted);font-weight:500}
 
   /* ---------- calendar ---------- */
@@ -278,7 +286,7 @@
   .day .crown{position:absolute;top:2px;right:3px;font-size:11px;line-height:1;pointer-events:none}
   .day.blank{border:none;background:none;cursor:default}
   .day .dn{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .day.filled .dn{color:rgba(255,255,255,.9);font-weight:600}
+  .day.filled .dn{color:var(--dn, rgba(255,255,255,.9));font-weight:600}
   .day.today{outline:2px solid var(--ink);outline-offset:-1px}
   .day[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink) inset}
 
@@ -311,7 +319,18 @@
     background:var(--focus);color:var(--on-focus,#fff);border:1px solid var(--focus);border-radius:var(--radius);
     padding:0 18px;font:inherit;font-weight:600;cursor:pointer;flex:none;
   }
-  .tasklist{display:flex;flex-direction:column;gap:5px}
+  .tasklist{display:flex;flex-direction:column;gap:5px;overscroll-behavior:contain}
+  /* A real, always-visible scrollbar: Chrome on Windows 11 otherwise draws a
+     hair-thin overlay one that disappears unless the cursor is right on it. */
+  .tasklist::-webkit-scrollbar{width:10px}
+  .tasklist::-webkit-scrollbar-track{background:transparent}
+  .tasklist::-webkit-scrollbar-thumb{background:color-mix(in srgb, var(--muted) 45%, transparent);
+    border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+  .tasklist::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb, var(--muted) 70%, transparent);background-clip:padding-box}
+  /* Fade the bottom edge while there's more list below (set by JS). */
+  .tasklist.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 28px), transparent);
+    mask-image:linear-gradient(#000 calc(100% - 28px), transparent)}
+  .task{touch-action:pan-y}
   .tcol{display:flex;flex-direction:column;gap:5px;min-width:0}
   .tcol + .tcol{margin-top:8px}   /* stacked (phone / no split): space between */
   .tasklist.split .tcol + .tcol{margin-top:0}
@@ -331,7 +350,9 @@
   .task.active{border-color:var(--tcat, var(--line));
     background:color-mix(in srgb, var(--tcat, var(--surface)) 18%, var(--surface));
     box-shadow:inset 4px 0 0 var(--tcat, var(--line)), 0 2px 12px -3px color-mix(in srgb, var(--tcat, var(--surface)) 45%, transparent)}
-  .task.done{opacity:.55}
+  /* Done = quieter colour and a strike-through, not transparency: fading the
+     whole row took its text and buttons below readable contrast. */
+  .task.done{box-shadow:inset 4px 0 0 color-mix(in srgb, var(--tcat, transparent) 45%, transparent)}
   .tick{
     width:21px;height:21px;flex:none;border:1.5px solid var(--muted);border-radius:5px;
     background:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;
@@ -342,17 +363,24 @@
     flex:1;min-width:0;background:none;border:none;font:inherit;text-align:left;color:var(--ink);
     cursor:pointer;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
-  .task.done .tname{text-decoration:line-through}
+  .task.done .tname{text-decoration:line-through;color:var(--muted)}
   .tmeta{display:flex;align-items:center;gap:7px;flex:none;color:var(--muted);font-size:12.5px}
   .tmeta .dot{width:8px;height:8px;border-radius:50%}
   .tmeta .tt{font-variant-numeric:tabular-nums}
   .tdel{background:none;border:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px;flex:none}
-  .tdel:hover{color:var(--warn)}
+  .tdel:hover{color:var(--warn-text)}
   .tdrag{background:none;border:none;color:var(--muted);cursor:grab;padding:0 1px;flex:none;
-    font-size:13px;letter-spacing:-4px;line-height:1;opacity:.65;touch-action:none;
+    font-size:13px;letter-spacing:-4px;line-height:1;touch-action:none;
     -webkit-user-select:none;user-select:none}
   .tdrag:active{cursor:grabbing}
-  .task.dragging{opacity:.6}
+  /* Dragging to reorder (see the task drag controller). */
+  .tasklist .task:not(.done){cursor:grab}
+  .task.lifted{transform:scale(1.02);box-shadow:0 8px 22px -8px rgba(0,0,0,.45);transition:transform .12s, box-shadow .12s}
+  .task.dragging{position:relative;z-index:5;cursor:grabbing;transition:none !important;
+    box-shadow:inset 4px 0 0 var(--tcat, transparent), 0 14px 30px -10px rgba(0,0,0,.5)}
+  .task.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1) !important}
+  .task.settling{transition:transform .16s ease-out !important}
+  body.task-dragging, body.task-dragging *{user-select:none;-webkit-user-select:none;cursor:grabbing !important}
   .trename{flex:1;min-width:0;font:inherit;padding:3px 6px;border:1px solid var(--focus);
     border-radius:6px;background:var(--surface);color:var(--ink)}
   .tasknote{color:var(--muted);font-size:13px;margin-top:11px}
@@ -401,10 +429,21 @@
   .ovpill-ic{font-size:17px;line-height:1;flex:none}
   .ovpill-main{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ovpill-sub{margin-left:auto;color:var(--muted);font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
-  .datewrap{position:relative;display:inline-flex;align-items:center}
-  .datetext{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;
-    background:var(--surface);color:var(--ink);min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
-  .date-overlay{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer}
+  /* The whole box opens the date picker (see the .datewrap click handler). The
+     native input stays underneath, invisible and click-through, only to hold
+     the value and anchor the picker: clicked directly, Chrome only opens the
+     picker from its tiny calendar icon, which is why it used to work only "in
+     one specific spot". */
+  .datewrap{position:relative;display:inline-flex;align-items:center;cursor:pointer;border-radius:8px}
+  .datewrap:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .datetext{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;
+    background:var(--surface);color:var(--ink);min-width:124px;text-align:left;font-variant-numeric:tabular-nums;
+    display:inline-flex;align-items:center;justify-content:space-between;gap:10px;transition:border-color .15s}
+  .datetext::after{content:"";width:14px;height:14px;flex:none;opacity:.6;background:currentColor;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E") center/contain no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E") center/contain no-repeat}
+  .datewrap:hover .datetext{border-color:var(--muted)}
+  .date-overlay{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;pointer-events:none}
   .cd-daterow{display:inline-flex;align-items:center;gap:10px}
   .dayrow{display:flex;align-items:center;gap:9px;margin-bottom:9px}
   .dayrow .dot{width:11px;height:11px;border-radius:50%;flex:none}
@@ -412,6 +451,11 @@
   .dayrow input[type=number]{width:52px;text-align:right;font:inherit;padding:6px 8px;
     border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-variant-numeric:tabular-nums}
   .dayrow .unit{color:var(--muted);font-size:12.5px}
+  .muted-tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:4px;vertical-align:1px}
+  .devrow{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .devrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .devrow .v{font-variant-numeric:tabular-nums;color:var(--muted)}
+  .devrow.off .v{text-decoration:line-through;opacity:.7}
   .swatches{display:flex;gap:10px}
   .swatch{
     width:28px;height:28px;border-radius:50%;border:2px solid transparent;
@@ -421,12 +465,24 @@
   .field input[type=text]{width:180px}
   .dialog-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
   .catrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-  .catcolor{width:28px;height:28px;flex:none;padding:0;border:1px solid var(--line);border-radius:7px;background:none;cursor:pointer}
-  .catcolor::-webkit-color-swatch-wrapper{padding:2px}
-  .catcolor::-webkit-color-swatch{border:none;border-radius:5px}
+  .catcolor{width:32px;height:32px;flex:none;padding:0;border:2px solid var(--surface);border-radius:50%;cursor:pointer;
+    box-shadow:0 0 0 1px var(--line);transition:transform .15s, box-shadow .15s}
+  .catcolor:hover{transform:scale(1.06)}
+  .catcolor[aria-expanded="true"]{box-shadow:0 0 0 2px var(--ink)}
+  .catpalette{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 0 14px 42px;margin-top:-4px;
+    animation:palIn .18s ease-out}
+  @keyframes palIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .catpalette .pal{width:28px;height:28px;border-radius:50%;border:2px solid var(--surface);padding:0;cursor:pointer;
+    box-shadow:0 0 0 1px var(--line);transition:transform .12s}
+  .catpalette .pal:hover{transform:scale(1.12)}
+  .catpalette .pal[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+  .pal-custom{position:relative;font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;
+    padding:5px 11px;cursor:pointer}
+  .pal-custom:hover{color:var(--ink);border-color:var(--muted)}
+  .pal-custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
   .catrow .dot{width:11px;height:11px;border-radius:50%;flex:none}
   .catrow .nm{flex:1;font-size:14px}
-  .catrow button{background:none;border:none;color:var(--warn);font:inherit;font-size:13px;cursor:pointer;padding:2px 4px}
+  .catrow button:not(.catcolor){background:none;border:none;color:var(--warn-text);font:inherit;font-size:13px;cursor:pointer;padding:2px 4px}
   .hint{color:var(--muted);font-size:13px;margin:0 0 13px}
   .footer{margin-top:22px;display:flex;gap:14px;row-gap:9px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
   .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:0}
@@ -611,6 +667,25 @@
     #calcard .day{aspect-ratio:auto}
     #calcard .breakdown{margin-top:14px;flex:none}
   }
+
+  /* ---------- another device is running the timer ---------- */
+  .mirrornote{display:inline-flex;align-items:center;gap:8px;margin:0 auto 10px;padding:5px 12px;border-radius:999px;
+    font-size:12.5px;color:var(--focus-text);background:var(--focus-soft);border:1px solid color-mix(in srgb, var(--focus) 35%, transparent)}
+  .mirrornote::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--focus);animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* ---------- motion: small, quick, and off for reduced-motion users ---------- */
+  @media (prefers-reduced-motion: no-preference){
+    .page.on{animation:pageIn .22s ease-out}
+    @keyframes pageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    dialog[open]{animation:dlgIn .18s ease-out}
+    @keyframes dlgIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+    button,.chip,.day,.task,.ovpill,.stat{transition:background-color .15s, border-color .15s, color .15s, transform .12s, box-shadow .15s}
+    button:active:not(:disabled){transform:scale(.97)}
+    .day:not(.blank):hover{transform:translateY(-1px);box-shadow:0 3px 10px -4px rgba(0,0,0,.25)}
+    .day[aria-pressed="true"]{transform:scale(1.04)}
+    .card{transition:box-shadow .2s}
+  }
 </style>
 </head>
 <body>
@@ -695,6 +770,7 @@
           <div class="tod" id="tod">--:--</div>
         </div>
 
+        <div class="mirrornote" id="mirrornote" hidden></div>
         <div class="controls">
           <button class="primary" id="startstop">Start</button>
           <button class="ghost" id="reset">Reset</button>
@@ -790,6 +866,12 @@
         <input type="color" class="swatch-custom" id="in-accent-custom" title="Pick an accent colour" value="#1F6F5C">
       </div>
     </div>
+    <div class="field"><label for="in-cal-color">Calendar color</label>
+      <span class="cd-daterow">
+        <button type="button" class="linklike" id="cal-color-reset">Same as accent</button>
+        <input type="color" class="swatch-custom" id="in-cal-color" title="Pick the calendar's colour" value="#1F6F5C">
+      </span>
+    </div>
     <div class="field"><label for="in-style">Clock style</label>
       <select id="in-style"><option value="digital">Digital</option><option value="analog">Analog</option></select>
     </div>
@@ -820,7 +902,7 @@
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
        updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.5</p>
+  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.6</p>
   <a class="linklike" id="dl-apk"
      href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
@@ -835,7 +917,7 @@
   <div id="catlist"></div>
   <div class="field" style="margin-top:14px">
     <label for="newcat">New category</label>
-    <input type="text" id="newcat" placeholder="e.g. MRCPI Part 2" maxlength="28">
+    <input type="text" id="newcat" placeholder="e.g. Anatomy" maxlength="28">
   </div>
   <div class="dialog-actions">
     <button class="ghost" id="cat-close">Close</button>
@@ -876,6 +958,7 @@
   <h2 id="day-title">Edit day</h2>
   <p class="hint">Set the exact time logged for each category on this day.</p>
   <div id="day-rows"></div>
+  <div id="day-devices"></div>
   <div class="dialog-actions">
     <button class="ghost" id="day-clear">Clear day</button>
     <button class="ghost" id="day-cancel">Cancel</button>
@@ -917,7 +1000,7 @@ var state = {
             style:"digital", theme:"auto",
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
-            showGoal:true, showCycle:true, countdownDate:""},
+            showGoal:true, showCycle:true, countdownDate:"", calColor:""},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
   // Logged time lives in `log` (see the ledger section): per day, one record
@@ -928,7 +1011,13 @@ var state = {
   taskTime:{},      // "2026-09-04": { taskId: seconds }            (derived)
   tasks:[],        // {id, text, catId, done, doneDate}
   activeTask:null,
-  completed:0
+  completed:0,
+  // When each synced field was last changed on some device (ms). Sync keeps
+  // the newer change per field, so an older snapshot can never undo a newer
+  // tap. Keys: categories, tasks, activeCat, activeTask, completed,
+  // "s.<setting>", and "timer" (paused timer / which device is running it).
+  meta:{},
+  gone:{}           // id -> ms a task/category was deleted, so deletions sync
 };
 
 /* ---------- logged-time ledger ----------
@@ -983,12 +1072,31 @@ function deriveTotals(){
   var t = totalsOf(state.log);
   state.days = t.days; state.taskTime = t.taskTime;
 }
-function ownRec(k){
+/* A readable name for this device, stored on its ledger records so the day
+   editor can show which device logged what ("Android app 2h 10m"). */
+function deviceName(){
+  if(typeof window.AndroidTimer !== "undefined") return "Android app";
+  var ua = navigator.userAgent || "";
+  var br = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+         : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
+  var os = /Android/.test(ua) ? "Android" : /iPhone|iPad|iPod/.test(ua) ? "iOS"
+         : /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+  return br + (os ? " on " + os : "");
+}
+/* Each device owns two records per day: what it LOGGED (key = DEVICE), and the
+   corrections made on it in the day editor (key = DEVICE + EDIT). Both merge
+   the same way and both count in the totals; keeping them apart just means the
+   per-device breakdown lists real study time, not edits. */
+var EDIT = "~e";
+function isEditRec(dev){ return dev.slice(-EDIT.length) === EDIT; }
+function ownRec(k, edit){
   if(!state.log[k]) state.log[k] = {};
-  var r = state.log[k][DEVICE];
-  if(!r) r = state.log[k][DEVICE] = { t:0, d:{}, tt:{} };
+  var id = DEVICE + (edit ? EDIT : "");
+  var r = state.log[k][id];
+  if(!r) r = state.log[k][id] = { t:0, d:{}, tt:{} };
   if(!r.d) r.d = {};
   if(!r.tt) r.tt = {};
+  r.n = deviceName();
   return r;
 }
 function recTotal(r){ var s = 0, m = (r && r.d) || {}; for(var id in m) s += +m[id]||0; return s; }
@@ -1050,6 +1158,10 @@ function importLegacy(ledger, days, taskTime){
   }
 }
 
+/* True when this device's saved data predated the ledger and was folded in as
+   BASE history at load. Those totals are a copy of what the cloud ledger
+   already holds, so on the first pull they're dropped in favour of it. */
+var freshLegacy = false;
 function load(){
   try{
     var raw = localStorage.getItem(KEY);
@@ -1059,8 +1171,12 @@ function load(){
       if(d.settings) Object.assign(state.settings, d.settings);
       if(Array.isArray(d.categories) && d.categories.length) state.categories = d.categories;
       if(d.log && typeof d.log === "object") state.log = d.log;
-      // Storage from before the ledger: fold its totals in as shared history.
-      else importLegacy(state.log, d.days, d.taskTime);
+      // Storage from before the ledger: fold its totals in as shared history
+      // so they show offline -- but remember they're only a stale copy (see
+      // freshLegacy): if the cloud already has a ledger, it replaces them.
+      else if(d.days || d.taskTime){ importLegacy(state.log, d.days, d.taskTime); freshLegacy = true; }
+      if(d.meta && typeof d.meta === "object") state.meta = d.meta;
+      if(d.gone && typeof d.gone === "object") state.gone = d.gone;
       if(Array.isArray(d.tasks)) state.tasks = d.tasks;
       if(d.activeTask) state.activeTask = d.activeTask;
       if(typeof d.completed === "number") state.completed = d.completed;
@@ -1077,6 +1193,7 @@ var saveTimer = null;
 function save(now){
   if(saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
   if(!now){ saveTimer = setTimeout(function(){ save(true); }, 1500); return; }
+  if(!applyingRemote) stampChanges();
   try{ localStorage.setItem(KEY, JSON.stringify(state)); }
   catch(e){ note("Could not save. Storage may be full or blocked."); }
   pushSync();
@@ -1144,6 +1261,10 @@ function syncPayload(ledger){
   // device on the exact same displayed second instead of a second behind.
   p.timer = running ? null
     : { mode:mode, remaining:Math.ceil(Math.max(0, remaining)), committed:blockCommitted, len:blockLen };
+  // Which device is running the timer, so the others mirror it instead of
+  // running (and counting) the same study time themselves.
+  p.run = running ? { dev: DEVICE, n: deviceName(), at: runAt, mode: mode,
+                      end: Math.round(Date.now() + Math.max(0, remaining)*1000), len: blockLen } : null;
   return p;
 }
 
@@ -1166,8 +1287,16 @@ function initSync(){
     var ref = fbDb.collection("users").doc(user.uid);
     ref.get().then(function(snap){
       if(snap.exists){
-        // Existing account: the cloud copy wins -- adopt its settings & data.
-        applyRemoteState(snap.data());
+        var cd = snap.data();
+        // This device's pre-ledger totals are a stale copy of history the
+        // cloud ledger already holds: drop them rather than add them on top.
+        if(freshLegacy && cd && cd.log){
+          for(var lk in state.log) delete state.log[lk][BASE];
+          deriveTotals();
+        }
+        freshLegacy = false;
+        // Existing account: merge the cloud copy in (newest change per field).
+        applyRemoteState(cd);
       }else{
         // First device ever to sign in to this account: seed the cloud here.
         ref.set(syncPayload()).catch(function(){ note("Sync couldn't save just now -- it will retry."); });
@@ -1184,43 +1313,298 @@ function initSync(){
   });
 }
 
-// Merge another copy's logged time into a ledger: its ledger if it has one,
-// otherwise (an older app version wrote it) its plain totals as shared history.
+// Merge another copy's logged time into a ledger. A copy WITHOUT a ledger can
+// only come from an app older than 4.4: its totals are a stale copy of history
+// the ledger already holds per device, and importing them on top is exactly how
+// days got doubled. So it contributes nothing -- we just flag the old device.
+var oldClientSeen = false;
 function mergeRemoteInto(ledger, d){
-  var out = mergeLedger(ledger, d && d.log);
-  if(d && !d.log) importLegacy(out, d.days, d.taskTime);
+  if(d && !d.log && (d.days || d.taskTime) && !oldClientSeen){
+    oldClientSeen = true;
+    note("A device on an old app version is syncing. Update it to keep totals right.");
+  }
+  return mergeLedger(ledger, d && d.log);
+}
+
+/* ---------- field-level sync (everything except logged time) ----------
+   Each synced field carries the time it was last changed. Merging keeps the
+   newer change per field, so a snapshot written a moment BEFORE a tap -- but
+   arriving just after it -- can't snap the category, a task or a setting back
+   (it used to: the whole document won, so taps "didn't take" and new tasks
+   vanished). */
+var TRACKED = ["activeCat", "activeTask", "completed"];
+
+/* Tasks and categories merge ITEM BY ITEM rather than as one field: two
+   devices each adding a task used to keep only one device's list, losing the
+   other's task. Each item carries `m` (when it last changed); deletions are
+   remembered in state.gone (id -> when) so they sync too; the order of the
+   list is its own stamped field ("<list>.order"). */
+var LISTS = ["tasks", "categories"];
+var seenItems = { tasks: {}, categories: {} }, seenOrder = { tasks: "", categories: "" };
+function itemJson(it){ var c = {}; for(var k in it) if(k !== "m") c[k] = it[k]; return JSON.stringify(c); }
+function rememberLists(){
+  LISTS.forEach(function(L){
+    seenItems[L] = {};
+    (state[L] || []).forEach(function(it){ seenItems[L][it.id] = itemJson(it); });
+    seenOrder[L] = (state[L] || []).map(function(it){ return it.id; }).join(",");
+  });
+}
+function stampLists(){
+  if(!state.gone) state.gone = {};
+  var now = Date.now();
+  LISTS.forEach(function(L){
+    var cur = {};
+    (state[L] || []).forEach(function(it){
+      cur[it.id] = 1;
+      var j = itemJson(it);
+      if(seenItems[L][it.id] !== j){ it.m = now; seenItems[L][it.id] = j; }
+    });
+    for(var id in seenItems[L]) if(!cur[id]){ state.gone[id] = now; delete seenItems[L][id]; }
+    var order = (state[L] || []).map(function(it){ return it.id; }).join(",");
+    if(order !== seenOrder[L]){ state.meta[L + ".order"] = now; seenOrder[L] = order; }
+  });
+}
+function mergeGone(a, b){
+  var out = {}, id;
+  for(id in (a || {})) out[id] = a[id];
+  for(id in (b || {})) out[id] = Math.max(out[id] || 0, b[id]);
+  // Forget tombstones after 120 days; nothing that old is still in flight.
+  var cutoff = Date.now() - 120*86400000;
+  for(id in out) if(out[id] < cutoff) delete out[id];
   return out;
+}
+/* Merge one list. Per item the newer `m` wins (ties to `preferB`); an item is
+   dropped if it was deleted after its last change. Order follows whichever
+   copy reordered last, with anything it doesn't know appended. */
+function mergeList(L, a, aMeta, b, bMeta, gone, preferB){
+  var byId = {}, items = [];
+  (a || []).forEach(function(it){ byId[it.id] = it; });
+  (b || []).forEach(function(it){
+    var x = byId[it.id];
+    if(!x || (it.m||0) > (x.m||0) || ((it.m||0) === (x.m||0) && preferB)) byId[it.id] = it;
+  });
+  var ao = (a || []).map(function(it){ return it.id; }), bo = (b || []).map(function(it){ return it.id; });
+  var at = (aMeta && aMeta[L + ".order"]) || 0, bt = (bMeta && bMeta[L + ".order"]) || 0;
+  var first = (bt > at || (bt === at && preferB)) ? bo : ao, second = first === bo ? ao : bo;
+  var seen = {};
+  first.concat(second).forEach(function(id){
+    if(seen[id] || !byId[id]) return;
+    seen[id] = 1;
+    var it = byId[id];
+    if((gone[id] || 0) >= (it.m || 0) && gone[id]) return;
+    items.push(JSON.parse(JSON.stringify(it)));
+  });
+  return { items: items, orderAt: Math.max(at, bt) };
+}
+function trackedKeys(){
+  var ks = TRACKED.slice();
+  for(var s in state.settings) ks.push("s." + s);
+  return ks;
+}
+function fieldGet(o, k){ return k.indexOf("s.") === 0 ? (o.settings || {})[k.slice(2)] : o[k]; }
+function fieldSet(o, k, v){
+  if(k.indexOf("s.") === 0){ if(!o.settings) o.settings = {}; o.settings[k.slice(2)] = v; }
+  else o[k] = v;
+}
+// Last-seen JSON of each field, to spot local changes.
+var seenFields = {};
+function rememberFields(){
+  seenFields = {};
+  trackedKeys().forEach(function(k){ seenFields[k] = JSON.stringify(fieldGet(state, k)); });
+  rememberLists();
+}
+// Stamp every field (and list item) that changed locally since we last looked.
+function stampChanges(){
+  if(!state.meta) state.meta = {};
+  stampLists();
+  var now = Date.now();
+  trackedKeys().forEach(function(k){
+    var j = JSON.stringify(fieldGet(state, k));
+    if(k in seenFields && seenFields[k] !== j) state.meta[k] = now;
+    seenFields[k] = j;
+  });
+}
+// Type guards carried over from the old whole-document adopt.
+function adoptable(k, v){
+  if(v === undefined) return false;
+  if(k === "categories" || k === "tasks") return Array.isArray(v);
+  if(k === "completed") return typeof v === "number";
+  if(k === "activeCat") return !!v;
+  return true;
+}
+function remoteFieldKeys(remote){
+  var keys = {};
+  trackedKeys().forEach(function(k){ keys[k] = 1; });
+  for(var s in (remote.settings || {})) keys["s." + s] = 1;
+  return Object.keys(keys);
+}
+
+/* ---------- one timer across devices ----------
+   Only one device runs the timer. Starting it on a device makes that device
+   the runner (`run` in the synced doc, stamped by meta.timer); any other device
+   that was also running stops, takes back whatever it logged after that moment
+   (it was the same study time, counted twice), and then just mirrors the
+   runner's countdown. Pressing Start on a mirroring device takes the block over
+   from where it is. Automatic block changes on the runner don't stamp
+   meta.timer -- only deliberate actions (start, pause, reset, ...) decide which
+   device is in control, so a phone that wakes up from the background can never
+   grab the timer back from the device you're actually using. */
+var runAt = 0;      // when this device took control (its latest Start)
+var mirror = null;  // another device's run we're displaying, or null
+var runSegs = [];   // focus time banked since this device's latest Start, as
+                    // {t: end ms, s: secs, k: day, c: category, tk: task}
+function touchTimer(){ if(!state.meta) state.meta = {}; state.meta.timer = Date.now(); }
+function recordSeg(endMs, secs, dk){
+  var last = runSegs[runSegs.length - 1], tk = state.activeTask || null;
+  if(last && last.k === dk && last.c === state.activeCat && last.tk === tk &&
+     Math.abs((endMs - secs*1000) - last.t) < 3000){
+    last.t = endMs; last.s += secs;
+  }else{
+    runSegs.push({ t: endMs, s: secs, k: dk, c: state.activeCat, tk: tk });
+    if(runSegs.length > 200) runSegs.shift();
+  }
+}
+// Take back focus time this device banked after `at` (another device was the
+// runner from then on, so that time is already counted there).
+function removeOverlapSince(at){
+  var removed = 0;
+  runSegs.forEach(function(g){
+    var start = g.t - g.s*1000;
+    var cut = Math.min(g.s, Math.max(0, (g.t - Math.max(at, start))/1000));
+    if(cut <= 0) return;
+    adjust(g.k, "d", g.c, -cut);
+    if(g.tk) adjust(g.k, "tt", g.tk, -cut);
+    g.s -= cut; g.t -= cut*1000; removed += cut;
+  });
+  runSegs = runSegs.filter(function(g){ return g.s > 0.5; });
+  // This runs while applying a remote snapshot, when pushing is held off to
+  // avoid echo loops -- so ask for one push afterwards, or the correction
+  // (and anything banked just before it) would sit unsynced.
+  if(removed > 0) pushAfterApply = true;
+  return removed;
+}
+var pushAfterApply = false;
+function mirrorRun(run){
+  mirror = run;
+  mode = run.mode || "focus";
+  blockLen = +run.len || modeSeconds(mode);
+  remaining = Math.max(0, (run.end - Date.now())/1000);
+  blockCommitted = blockLen - remaining;   // the runner logs this block, not us
+  running = false;
+  document.body.classList.toggle("rest", mode !== "focus");
+  lastTick = Date.now();
+  saveLiveTimer();
+}
+function yieldTo(run){
+  // Bank everything up to now first, then give back the overlap.
+  var d = (Date.now() - lastTick)/1000;
+  if(d > 0){ remaining -= d; if(remaining < 0) remaining = 0; }
+  commitElapsed();
+  removeOverlapSince(run.at);
+  pushAfterApply = true;   // publish what we banked before handing over
+  mirrorRun(run);
+  nativeStop();
+  note("Timer moved to " + (run.n || "your other device") + ".");
+}
+function adoptPaused(t){
+  mirror = null;
+  mode = t.mode || mode;
+  remaining = Math.max(0, +t.remaining || 0);
+  blockLen = +t.len || modeSeconds(mode);
+  // The device that ran this block already logged its time into its own
+  // record, so treat it as fully banked here: adopting must never re-log it.
+  blockCommitted = Math.max(+t.committed || 0, blockLen - remaining);
+  document.body.classList.toggle("rest", mode !== "focus");
+  lastTick = Date.now();
+  saveLiveTimer();
+}
+function applyRemoteTimer(d){
+  if(!state.meta) state.meta = {};
+  var rt = (d.meta && d.meta.timer) || 0, lt = state.meta.timer || 0;
+  var run = (d.run && d.run.dev && d.run.dev !== DEVICE) ? d.run : null;
+  // Updates from the runner we're already mirroring (its next block, etc.).
+  var sameRun = run && mirror && run.dev === mirror.dev && run.at === mirror.at;
+  if(rt > lt || sameRun){
+    if(rt > lt) state.meta.timer = rt;
+    if(run){
+      if(running) yieldTo(run);
+      else { removeOverlapSince(run.at); mirrorRun(run); }
+    }else if(d.run && d.run.dev === DEVICE){
+      // Our own run echoed back.
+    }else if(d.timer){
+      if(running) touchTimer();   // a stale pause from elsewhere: keep control
+      else adoptPaused(d.timer);
+    }else if(mirror){
+      mirror = null;
+    }
+  }else if(!rt && !lt && d.timer && !running && !mirror){
+    adoptPaused(d.timer);   // a doc from before per-field stamps
+  }
+}
+
+/* Before writing, keep any field the cloud holds a NEWER change for (another
+   device changed it and we haven't received that yet) -- otherwise our push
+   would undo it. Same for the timer: if another device took control after our
+   last timer action, its run stays. Mutates and returns p. */
+function mergePayloadWithCloud(p, cloud){
+  if(!cloud) return p;
+  var cm = cloud.meta || {};
+  p.meta = p.meta || {};
+  p.gone = mergeGone(p.gone, cloud.gone);
+  LISTS.forEach(function(L){
+    if(!Array.isArray(cloud[L])) return;
+    var r = mergeList(L, p[L], p.meta, cloud[L], cm, p.gone, false);
+    p[L] = r.items;
+    if(r.orderAt) p.meta[L + ".order"] = r.orderAt;
+  });
+  remoteFieldKeys(cloud).forEach(function(k){
+    var v = fieldGet(cloud, k);
+    if((cm[k]||0) > (p.meta[k]||0) && adoptable(k, v)){
+      fieldSet(p, k, v);
+      p.meta[k] = cm[k];
+    }
+  });
+  if((cm.timer||0) > (p.meta.timer||0)){
+    p.timer = cloud.timer || null;
+    p.run = cloud.run || null;
+    p.meta.timer = cm.timer;
+  }
+  return p;
 }
 
 function applyRemoteState(d){
   if(!d || typeof d !== "object") return;
+  stampChanges();   // catch any local edit not saved yet, BEFORE comparing
   applyingRemote = true;
-  if(d.settings) Object.assign(state.settings, d.settings);
-  if(Array.isArray(d.categories)) state.categories = d.categories;
+  if(!state.meta) state.meta = {};
+  var rm = d.meta || {};
+  // Per field: adopt the remote value only where its change is at least as new
+  // (ties go to the cloud, matching the old "cloud wins on sign-in" when
+  // nothing carries a stamp yet).
+  remoteFieldKeys(d).forEach(function(k){
+    var v = fieldGet(d, k);
+    if((rm[k]||0) >= (state.meta[k]||0) && adoptable(k, v)){
+      fieldSet(state, k, JSON.parse(JSON.stringify(v)));
+      if(rm[k]) state.meta[k] = rm[k];
+    }
+  });
+  // Tasks and categories: item by item (see LISTS).
+  state.gone = mergeGone(state.gone, d.gone);
+  LISTS.forEach(function(L){
+    if(!Array.isArray(d[L])) return;
+    var r = mergeList(L, state[L], state.meta, d[L], rm, state.gone, true);
+    state[L] = r.items;
+    if(r.orderAt) state.meta[L + ".order"] = r.orderAt;
+  });
+  if(!getCat(state.activeCat) || getCat(state.activeCat).archived){
+    var liveCats = state.categories.filter(function(c){ return !c.archived; });
+    state.activeCat = liveCats.length ? liveCats[0].id : null;
+  }
   // Merge the ledger (never adopt a copy wholesale): every device's time is kept.
   state.log = mergeRemoteInto(state.log, d);
   deriveTotals();
-  if(Array.isArray(d.tasks)) state.tasks = d.tasks;
-  if("activeTask" in d) state.activeTask = d.activeTask;
-  if(typeof d.completed === "number") state.completed = d.completed;
-  if(d.activeCat) state.activeCat = d.activeCat;
-  // Adopt another device's paused/reset/idle timer, but never clobber a timer
-  // that's actively running here (local running always wins).
-  if(d.timer && !running){
-    mode = d.timer.mode || mode;
-    remaining = Math.max(0, +d.timer.remaining || 0);
-    blockLen = +d.timer.len || modeSeconds(mode);
-    // The device that actually ran this block already logged its elapsed time
-    // into its own ledger record. So treat the block as fully banked here:
-    // adopting it must never re-log that time on this device, which (totals
-    // being the sum across devices) would double-count it. Taking the max
-    // also absorbs a block length that doesn't match, instead of crediting
-    // the difference as time studied.
-    blockCommitted = Math.max(+d.timer.committed || 0, blockLen - remaining);
-    document.body.classList.toggle("rest", mode !== "focus");
-    lastTick = Date.now();
-    saveLiveTimer();
-  }
+  applyRemoteTimer(d);
+  rememberFields();   // what we just adopted isn't a local edit
   save(true);
   renderAll();
   // If the Settings dialog is open (you likely just signed in from its Sync
@@ -1229,6 +1613,7 @@ function applyRemoteState(d){
   var ds = document.getElementById("dlg-settings");
   if(ds && ds.open) fillSettingsInputs();
   applyingRemote = false;
+  if(pushAfterApply){ pushAfterApply = false; pushSync(); }
 }
 
 function pushSync(){
@@ -1247,7 +1632,8 @@ function pushSync(){
         // onSnapshot and is merged in then (anything logged meanwhile is newer
         // in this device's own record, so it survives that merge).
         var cloud = snap.exists ? snap.data() : null;
-        tx.set(ref, syncPayload(mergeRemoteInto(state.log, cloud)));
+        stampChanges();
+        tx.set(ref, mergePayloadWithCloud(syncPayload(mergeRemoteInto(state.log, cloud)), cloud));
       });
     }).catch(function(){ note("Sync couldn't save just now -- it will retry."); });
   }, 600);
@@ -1310,12 +1696,12 @@ function daySeconds(k){
 // the freshest copy of that day.
 // Add (or, negative, remove) time in THIS device's record for day k. A removal
 // never takes the day's total for that category/task below zero.
-function adjust(k, f, id, secs){
+function adjust(k, f, id, secs, edit){
   if(!id || !secs) return;
   var have = ((f === "d" ? state.days : state.taskTime)[k] || {})[id] || 0;
   if(secs < 0 && -secs > have) secs = -have;
   if(!secs) return;
-  var r = ownRec(k);
+  var r = ownRec(k, edit);
   r[f][id] = (+r[f][id]||0) + secs;
   r.t = Date.now();
   deriveDay(k);
@@ -1380,6 +1766,9 @@ function modeSeconds(m){
   return state.settings.longBreak*60;
 }
 function setMode(m, autostart){
+  // Only reached via blockFinished: an automatic change, so no touchTimer()
+  // (see "one timer across devices").
+  mirror = null;
   mode = m;
   remaining = modeSeconds(m);
   blockLen = modeSeconds(m);
@@ -1398,6 +1787,8 @@ function setMode(m, autostart){
    Short break, and tapping back to Focus leaves Focus exactly where it was. */
 function selectMode(m){
   if(m === mode || running) return;
+  mirror = null;
+  touchTimer();
   remainingByMode[mode] = {remaining:remaining, committed:blockCommitted, len:blockLen};
   mode = m;
   document.body.classList.toggle("rest", m !== "focus");
@@ -1421,6 +1812,7 @@ function toggle(){
     tick();
     running = false;
     lastTick = Date.now();
+    touchTimer();
     save(true);
   }else{
     // A focus block logs against the active category, so there has to be one.
@@ -1432,14 +1824,26 @@ function toggle(){
       var ni = document.getElementById("newcat"); if(ni) ni.focus();
       return;
     }
+    // Starting makes this device the runner. If it was mirroring another
+    // device, mode/remaining/blockCommitted already hold that block's live
+    // position (fully banked by the other device), so it carries on from there.
+    var t = Date.now();
+    mirror = null;
+    runAt = t;
+    runSegs = [];
+    if(!state.meta) state.meta = {};
+    state.meta.timer = t;
     running = true;
-    lastTick = Date.now();
-    lastRunSave = Date.now();
+    lastTick = t;
+    lastRunSave = t;
+    save(true);   // publish the takeover now, not 20s from now
   }
   nativeSync();
   renderClock();
 }
 function resetBlock(){
+  mirror = null;
+  touchTimer();
   running = false;
   remaining = modeSeconds(mode);
   blockLen = modeSeconds(mode);
@@ -1449,7 +1853,9 @@ function resetBlock(){
   save(true); nativeStop(); renderClock();
 }
 function endBlock(){
+  if(mirror) return;   // another device is running this block; it ends it
   if(mode === "focus" && !running && remaining >= blockLen) return;
+  touchTimer();
   // Flush the delta since the last tick (a running block hasn't ticked in up
   // to 250ms) and bank the ACTUAL elapsed before ending -- so ending a block
   // keeps the real time studied instead of throwing it away, and doesn't
@@ -1478,17 +1884,36 @@ function commitElapsed(){
   var elapsed = blockLen - Math.max(0, remaining);
   var add = elapsed - blockCommitted;
   if(add <= 0) return;
-  var dk = key(new Date());
-  addSeconds(dk, state.activeCat, add);
-  if(state.activeTask) addTaskSeconds(dk, state.activeTask, add);
+  bankAt(Date.now(), add);
   blockCommitted += add;
   saveLiveTimer();
 }
+/* Log `secs` of focus time that ended at `endMs`, into that moment's day, and
+   remember it as a segment of this device's run (see removeOverlapSince). */
+function bankAt(endMs, secs){
+  var dk = key(new Date(endMs));
+  addSeconds(dk, state.activeCat, secs);
+  if(state.activeTask) addTaskSeconds(dk, state.activeTask, secs);
+  recordSeg(endMs, secs, dk);
+}
 function tick(){
   var now = Date.now();
+  // On Android, a gap this long means the WebView was frozen in the background
+  // while the service kept the real timer. Adopt what the service did (it may
+  // have finished blocks meanwhile) instead of guessing from the gap.
+  if(NATIVE && (running || nativeLive) && now - lastTick > 3000 && adoptNativeState()) return;
   var delta = (now - lastTick)/1000;
   lastTick = now;
-  if(!running){ renderTod(); return; }
+  if(!running){
+    if(mirror){
+      // Show the other device's countdown live.
+      remaining = Math.max(0, (mirror.end - now)/1000);
+      blockCommitted = blockLen - remaining;
+      renderClock();
+    }
+    renderTod();
+    return;
+  }
   if(delta < 0) delta = 0;
   // No upper clamp on delta: commitElapsed is bounded by the block length
   // (remaining can't go below 0), so even a huge gap credits at most the
@@ -1506,6 +1931,9 @@ function tick(){
   renderClock();
 }
 function blockFinished(){
+  // The page has just accounted for this block itself; if the service also
+  // recorded it as finished, that record must not be credited again later.
+  ackService();
   chime();
   nativeDone(mode);
   if(mode === "focus"){
@@ -1582,9 +2010,27 @@ function saveLiveTimer(){
       committed: blockCommitted,
       len: blockLen,
       endTime: running ? Math.round(Date.now() + Math.max(0, remaining)*1000) : null,
-      pausedRemainingMs: running ? 0 : Math.round(Math.max(0, remaining)*1000)
+      pausedRemainingMs: running ? 0 : Math.round(Math.max(0, remaining)*1000),
+      seq: liveSeq,        // last service record this page has accounted for...
+      sid: liveSid,        // ...in this service instance
+      runAt: runAt,
+      segs: runSegs
     }));
   }catch(e){}
+}
+/* Android service bookkeeping: the service numbers every block it finishes on
+   its own (seq), per service instance (sid -- numbering restarts when the
+   service is recreated). liveSeq/liveSid: the latest record this page has
+   already accounted for. */
+var liveSeq = 0, liveSid = null;
+function serviceSnapshot(){
+  if(!NATIVE) return null;
+  try{ var raw = window.AndroidTimer.getServiceState(); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function ackService(){
+  var s = serviceSnapshot();
+  if(s){ liveSeq = s.seq || 0; liveSid = s.sid || null; }
 }
 function clearLiveTimer(){
   try{ localStorage.removeItem(LIVE_KEY); }catch(e){}
@@ -1602,6 +2048,8 @@ function restoreLiveTimer(){
     mode = s.mode;
     blockCommitted = s.committed || 0;
     blockLen = s.len || modeSeconds(mode);
+    runAt = s.runAt || 0;
+    runSegs = Array.isArray(s.segs) ? s.segs : [];
     document.body.classList.toggle("rest", mode !== "focus");
     if(s.running && s.endTime){
       running = true;
@@ -1642,6 +2090,8 @@ function nativeSync(){
       /* Paused, or a block queued but not started. Keep the notification. */
       window.AndroidTimer.pauseTimer(
         String(Math.round(Math.max(0, remaining)*1000)), modeLabel());
+      if(window.AndroidTimer.setTotal)
+        window.AndroidTimer.setTotal(String(Math.round((blockLen || modeSeconds(mode))*1000)));
     }
   }catch(e){}
 }
@@ -1699,6 +2149,22 @@ function applyTheme(){
     }
   }
 
+  // Small coloured text (trend lines, selected tabs, "Remove", ...) uses these
+  // instead of the raw accent/warning colour, which can sit too close to a dark
+  // background. Each is nudged toward the text colour just enough to reach
+  // WCAG's 4.5:1 against every background it appears on.
+  var cs = getComputedStyle(root);
+  var surf = parseColor(cs.getPropertyValue("--surface")), page = parseColor(cs.getPropertyValue("--bg")),
+      ink = parseColor(cs.getPropertyValue("--ink"));
+  if(surf && page && ink){
+    [["--focus-text", "--focus"], ["--rest-text", "--rest"], ["--warn-text", "--warn"]].forEach(function(p){
+      var c = parseColor(cs.getPropertyValue(p[1]));
+      if(!c) return;
+      var soft = mixRgb(surf, c, 0.15);   // the tinted chips/tabs it sits on
+      root.style.setProperty(p[0], rgbStr(readableText(c, [surf, page, soft], ink, 4.5)));
+    });
+  }
+
   // Optional clock-face elements.
   document.body.classList.toggle("no-goal", s.showGoal === false);
   document.body.classList.toggle("no-cycle", s.showCycle === false);
@@ -1707,7 +2173,7 @@ function cycleTheme(){
   var order = ["auto","light","dark"];
   var i = order.indexOf(state.settings.theme);
   state.settings.theme = order[(i+1) % order.length];
-  save(true); applyTheme();
+  save(true); applyTheme(); renderCalendar();
 }
 
 /* ---------- clock rendering ---------- */
@@ -1796,7 +2262,19 @@ function renderClock(){
   }
 
   renderTod();
-  document.getElementById("startstop").textContent = running ? "Pause" : "Start";
+  // Pause while running; "Continue here" when another device is running it;
+  // "Resume" for a paused block that's partway through; "Start" only for a
+  // fresh block (nothing elapsed yet).
+  document.getElementById("startstop").textContent =
+    running ? "Pause" : mirror ? "Continue here" : (remaining < blockLen - 0.5) ? "Resume" : "Start";
+  // Another device is running the timer: say so, and leave only "Continue
+  // here" (Reset/End would act on a block this device isn't running).
+  var mn = document.getElementById("mirrornote");
+  if(mirror){
+    mn.textContent = "Running on " + (mirror.n || "your other device");
+    mn.hidden = false;
+  }else mn.hidden = true;
+  document.getElementById("reset").hidden = !!mirror;
   var eb = document.getElementById("endblock");
   if(mode === "focus"){
     eb.textContent = "End block";
@@ -1805,6 +2283,7 @@ function renderClock(){
     eb.textContent = "Skip break";
     eb.style.display = "";          // always skippable
   }
+  if(mirror) eb.style.display = "none";
   renderGoalBar();
   var done = state.completed % state.settings.cycles;
   document.getElementById("cyclenote").textContent =
@@ -2000,17 +2479,9 @@ function buildTaskRow(t){
     if(state.activeTask) state.activeCat = t.catId;
     save(true); renderTasks(); renderTaskChips(); renderChips(); nativeSync();
   });
-  // Rename in place: long-press (touch) or double-click (desktop). A short tap
-  // still just logs time; the long-press fires before any click is counted.
+  // Rename in place: double-click (mouse), or press-and-hold then release
+  // without moving (touch) -- see the task drag controller.
   if(!t.done){
-    var lpTimer = null;
-    name.addEventListener("pointerdown", function(){
-      lpTimer = setTimeout(function(){ lpTimer = null; startRename(row, name, t); }, 500);
-    });
-    var cancelLP = function(){ if(lpTimer){ clearTimeout(lpTimer); lpTimer = null; } };
-    name.addEventListener("pointerup", cancelLP);
-    name.addEventListener("pointermove", cancelLP);
-    name.addEventListener("pointercancel", cancelLP);
     name.addEventListener("dblclick", function(e){ e.preventDefault(); startRename(row, name, t); });
   }
 
@@ -2018,16 +2489,14 @@ function buildTaskRow(t){
   row.style.setProperty("--tcat", catColor(t.catId));
   row.title = catName(t.catId);
 
-  // Drag handle to reorder (open tasks only). Pointer Events so it works the
-  // same on touch and mouse.
+  // The whole row drags (see the task drag controller); the grip is just the
+  // visual cue -- and on touch it drags straight away, without the hold.
   var grip = null;
   if(!t.done){
-    grip = document.createElement("button");
+    grip = document.createElement("span");
     grip.className = "tdrag";
-    grip.type = "button";
     grip.innerHTML = "&#8942;&#8942;";
-    grip.setAttribute("aria-label", "Drag to reorder");
-    grip.addEventListener("pointerdown", function(e){ startDrag(e, row); });
+    grip.setAttribute("aria-hidden", "true");
   }
 
   var del = document.createElement("button");
@@ -2074,42 +2543,149 @@ function startRename(row, nameEl, t){
   input.addEventListener("blur", function(){ commit(true); });
 }
 
-// Drag-to-reorder open tasks. On drop, rebuild state.tasks to match the DOM
-// order (done/carried rows keep their rendered order; anything not shown is
-// appended unchanged).
-function startDrag(e, row){
-  if(row.classList.contains("done")) return;
-  e.preventDefault();
-  row.classList.add("dragging");
-  function onMove(ev){
-    var col = row.parentNode; if(!col) return;
-    row.style.pointerEvents = "none";
-    var under = document.elementFromPoint(ev.clientX, ev.clientY);
-    row.style.pointerEvents = "";
-    if(!under) return;
-    var target = under.closest ? under.closest(".task") : null;
-    if(!target || target === row || target.parentNode !== col || target.classList.contains("done")) return;
-    var r = target.getBoundingClientRect();
-    col.insertBefore(row, (ev.clientY < r.top + r.height/2) ? target : target.nextSibling);
+/* ---------- reordering tasks by dragging ----------
+   Mouse: press anywhere on an open task and drag. Touch: a quick swipe still
+   scrolls the list; press and HOLD to lift the task, then drag (from the ⋮⋮
+   grip it lifts straight away). The task follows the pointer and the others
+   slide out of its way as it passes them; dragging near the list's top or
+   bottom edge scrolls it. A plain tap/click still picks the task; on touch,
+   holding without moving and letting go renames it (as long-press used to). */
+(function(){
+  var list = document.getElementById("tasklist");
+  var HOLD = 280, RENAME_HOLD = 550, SLOP = 6, EDGE = 44;
+  var P = null, D = null, swallowClick = false, raf = 0;
+
+  function contentCenter(d, i){ return d.rects[i].top + d.rects[i].height/2 + d.scroll0; }
+  function cancelPress(){
+    if(P){ clearTimeout(P.timer); P.row.classList.remove("lifted"); }
+    P = null;
   }
-  function onUp(){
-    document.removeEventListener("pointermove", onMove);
-    document.removeEventListener("pointerup", onUp);
-    row.classList.remove("dragging");
-    var order = [];
-    document.querySelectorAll("#tasklist .task").forEach(function(el){
-      var id = el.getAttribute("data-tid"); if(id) order.push(id);
+  list.addEventListener("pointerdown", function(e){
+    if(e.button !== 0 || D) return;
+    var row = e.target.closest(".task");
+    if(!row || !list.contains(row) || row.classList.contains("done")) return;
+    if(e.target.closest(".tick, .tdel, input")) return;
+    var mouse = e.pointerType === "mouse", onGrip = !!e.target.closest(".tdrag");
+    P = { row: row, x: e.clientX, y: e.clientY, id: e.pointerId, mouse: mouse, armed: mouse || onGrip, t0: Date.now() };
+    if(!P.armed){
+      P.timer = setTimeout(function(){
+        if(!P) return;
+        P.armed = true;
+        P.row.classList.add("lifted");
+        if(navigator.vibrate) try{ navigator.vibrate(12); }catch(_){}
+      }, HOLD);
+    }
+  });
+  window.addEventListener("pointermove", function(e){
+    if(D){ if(e.pointerId === D.id){ D.lastY = e.clientY; moveDrag(); } return; }
+    if(!P || e.pointerId !== P.id) return;
+    if(Math.hypot(e.clientX - P.x, e.clientY - P.y) < SLOP) return;
+    if(!P.armed){ cancelPress(); return; }   // moved before the hold: it's a scroll
+    beginDrag(e);
+  }, { passive: true });
+  // Once a task is lifted, the finger drags it instead of scrolling the list.
+  list.addEventListener("touchmove", function(e){ if(D || (P && P.armed)) e.preventDefault(); }, { passive: false });
+  window.addEventListener("pointerup", function(e){
+    if(D){ if(e.pointerId === D.id) endDrag(false); return; }
+    if(!P || e.pointerId !== P.id) return;
+    var p = P; cancelPress();
+    if(!p.mouse && p.armed && Date.now() - p.t0 >= RENAME_HOLD){
+      // Held and let go without moving: rename (the old long-press).
+      swallowClick = true;
+      var t = getTask(p.row.getAttribute("data-tid")), nm = p.row.querySelector(".tname");
+      if(t && nm) startRename(p.row, nm, t);
+    }
+    setTimeout(function(){ swallowClick = false; }, 0);
+  });
+  window.addEventListener("pointercancel", function(e){
+    if(D){ if(e.pointerId === D.id) endDrag(true); }
+    else cancelPress();
+  });
+  // A drag (or hold-to-rename) must not also count as a tap on the task.
+  list.addEventListener("click", function(e){
+    if(swallowClick){ swallowClick = false; e.stopPropagation(); e.preventDefault(); }
+  }, true);
+
+  function beginDrag(e){
+    var row = P.row, col = row.parentNode;
+    clearTimeout(P.timer);
+    var rows = Array.prototype.filter.call(col.children, function(el){
+      return el.classList.contains("task") && !el.classList.contains("done");
     });
-    var byId = {}; state.tasks.forEach(function(x){ byId[x.id] = x; });
-    var seen = {}, next = [];
-    order.forEach(function(id){ if(byId[id]){ next.push(byId[id]); seen[id] = 1; } });
-    state.tasks.forEach(function(x){ if(!seen[x.id]) next.push(x); });
-    state.tasks = next;
-    save(true); nativeSync(); renderTasks();
+    var rects = rows.map(function(r){ return r.getBoundingClientRect(); });
+    var from = rows.indexOf(row);
+    D = { id: P.id, row: row, rows: rows, rects: rects, from: from, to: from,
+          startY: P.y, lastY: e.clientY, scroll0: list.scrollTop };
+    P = null;
+    swallowClick = true;
+    row.classList.remove("lifted");
+    row.classList.add("dragging");
+    rows.forEach(function(r){ if(r !== row) r.classList.add("shifting"); });
+    document.body.classList.add("task-dragging");
+    moveDrag();
+    raf = requestAnimationFrame(autoScroll);
   }
-  document.addEventListener("pointermove", onMove);
-  document.addEventListener("pointerup", onUp);
-}
+  function moveDrag(){
+    var d = D;
+    var dy = d.lastY - d.startY + (list.scrollTop - d.scroll0);
+    d.row.style.transform = "translateY(" + dy + "px) scale(1.02)";
+    var c = contentCenter(d, d.from) + dy, to = d.from, i;
+    for(i = d.from + 1; i < d.rows.length; i++) if(c > contentCenter(d, i)) to = i;
+    for(i = d.from - 1; i >= 0; i--) if(c < contentCenter(d, i)) to = i;
+    if(to === d.to) return;
+    d.to = to;
+    // Slide the rows the dragged one has passed into the gap it left.
+    var shift = d.rects[d.from].height + (d.rows.length > 1 ? Math.abs(d.rects[1].top - d.rects[0].bottom) : 5);
+    d.rows.forEach(function(r, j){
+      if(j === d.from) return;
+      var y = (d.from < to && j > d.from && j <= to) ? -shift
+            : (to < d.from && j >= to && j < d.from) ? shift : 0;
+      r.style.transform = y ? "translateY(" + y + "px)" : "";
+    });
+  }
+  function autoScroll(){
+    if(!D) return;
+    var box = list.getBoundingClientRect(), v = 0;
+    if(D.lastY < box.top + EDGE) v = -Math.ceil((box.top + EDGE - D.lastY) / 4);
+    else if(D.lastY > box.bottom - EDGE) v = Math.ceil((D.lastY - (box.bottom - EDGE)) / 4);
+    if(v){
+      var before = list.scrollTop;
+      list.scrollTop += Math.max(-14, Math.min(14, v));
+      if(list.scrollTop !== before) moveDrag();
+    }
+    raf = requestAnimationFrame(autoScroll);
+  }
+  function endDrag(cancelled){
+    var d = D; D = null;
+    cancelAnimationFrame(raf);
+    document.body.classList.remove("task-dragging");
+    setTimeout(function(){ swallowClick = false; }, 0);
+    var to = cancelled ? d.from : d.to;
+    // Glide the task into its new slot, then commit the order.
+    var off = to > d.from ? d.rects[to].bottom - d.rects[d.from].bottom
+            : to < d.from ? d.rects[to].top - d.rects[d.from].top : 0;
+    off += list.scrollTop - d.scroll0;
+    d.row.classList.add("settling");
+    d.row.style.transform = "translateY(" + (off - (list.scrollTop - d.scroll0)) + "px)";
+    if(cancelled) d.rows.forEach(function(r){ if(r !== d.row) r.style.transform = ""; });
+    setTimeout(function(){
+      if(to !== d.from){
+        var movedId = d.row.getAttribute("data-tid"), refId = d.rows[to].getAttribute("data-tid");
+        var arr = state.tasks.slice(), mi = -1, i;
+        for(i = 0; i < arr.length; i++) if(arr[i].id === movedId){ mi = i; break; }
+        if(mi >= 0){
+          var moved = arr.splice(mi, 1)[0], ri = -1;
+          for(i = 0; i < arr.length; i++) if(arr[i].id === refId){ ri = i; break; }
+          if(ri >= 0){ arr.splice(to > d.from ? ri + 1 : ri, 0, moved); state.tasks = arr; }
+        }
+        save(true); nativeSync();
+      }
+      var keep = list.scrollTop;
+      renderTasks();
+      list.scrollTop = keep;
+    }, 170);
+  }
+})();
 
 function renderTasks(){
   var wrap = document.getElementById("tasklist");
@@ -2158,6 +2734,7 @@ function renderTasks(){
   bits.push(at ? "Logging to " + at.text : "Tap a task to log time against it");
   if(done.length) bits.push(done.length + " done today");
   note2.textContent = bits.join(" \u00b7 ");
+  if(window.__updateTaskMore) window.__updateTaskMore();
 }
 function addTask(){
   var inp = document.getElementById("newtask");
@@ -2210,13 +2787,52 @@ function renderStats(){
   }
 }
 
-function shade(f){
-  var lo = getComputedStyle(document.documentElement).getPropertyValue("--heat-lo").split(",");
-  var hi = getComputedStyle(document.documentElement).getPropertyValue("--heat-hi").split(",");
-  var r = Math.round(+lo[0] + (+hi[0] - +lo[0])*f);
-  var g = Math.round(+lo[1] + (+hi[1] - +lo[1])*f);
-  var b = Math.round(+lo[2] + (+hi[2] - +lo[2])*f);
-  return "rgb("+r+","+g+","+b+")";
+/* Calendar heat colour: the calendar's own colour if one is set, otherwise the
+   accent. A day is that colour mixed into the card surface by how much of the
+   daily goal it reached, so it reads in light and dark themes alike. */
+function parseColor(s){
+  s = (s || "").trim();
+  var m = /^#([0-9a-f]{3})$/i.exec(s);
+  if(m) s = "#" + m[1].split("").map(function(c){ return c + c; }).join("");
+  m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(s);
+  if(m) return [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)];
+  m = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(s);
+  return m ? [+m[1], +m[2], +m[3]] : null;
+}
+function heatBase(){
+  var cs = getComputedStyle(document.documentElement);
+  return {
+    hi: parseColor(state.settings.calColor) || parseColor(cs.getPropertyValue("--focus")) || [31,111,92],
+    bg: parseColor(cs.getPropertyValue("--surface")) || [255,255,255]
+  };
+}
+function heatColor(base, f){
+  var t = 0.14 + 0.86*Math.max(0, Math.min(1, f));
+  return base.bg.map(function(v, i){ return Math.round(v + (base.hi[i] - v)*t); });
+}
+function rgbStr(c){ return "rgb(" + c.join(",") + ")"; }
+function mixRgb(a, b, t){ return a.map(function(v, i){ return Math.round(v + (b[i] - v)*t); }); }
+// WCAG relative luminance / contrast ratio.
+function relLum(c){
+  var a = c.map(function(v){ v /= 255; return v <= 0.03928 ? v/12.92 : Math.pow((v + 0.055)/1.055, 2.4); });
+  return 0.2126*a[0] + 0.7152*a[1] + 0.0722*a[2];
+}
+function contrastRatio(a, b){
+  var x = relLum(a), y = relLum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+// `fg`, moved toward `toward` only as far as needed to reach `target`
+// contrast against every colour in `bgs`.
+function readableText(fg, bgs, toward, target){
+  for(var t = 0; t <= 1.0001; t += 0.05){
+    var c = mixRgb(fg, toward, Math.min(1, t));
+    if(bgs.every(function(bg){ return contrastRatio(c, bg) >= target; })) return c;
+  }
+  return toward;
+}
+function readableOn(c){
+  var lum = (0.299*c[0] + 0.587*c[1] + 0.114*c[2]) / 255;
+  return lum > 0.6 ? "rgba(20,28,26,.88)" : "rgba(255,255,255,.92)";
 }
 
 function renderCalendar(){
@@ -2228,6 +2844,7 @@ function renderCalendar(){
   var dim = new Date(viewY, viewM+1, 0).getDate();
   var todayKey = key(new Date());
   var goal = state.settings.goal*3600;
+  var heat = heatBase();
 
   // The month's best day gets a crown -- only when something's actually logged.
   var crownK = null, crownS = 0;
@@ -2249,9 +2866,10 @@ function renderCalendar(){
       b.className = "day" + (s>0 ? " filled":"") + (k===todayKey ? " today":"");
       b.setAttribute("aria-pressed", selectedDay === k);
       if(s>0){
-        var f = Math.min(1, s/goal);
-        b.style.background = shade(f);
-        b.style.borderColor = shade(Math.min(1, f+0.15));
+        var f = Math.min(1, s/goal), fill = heatColor(heat, f);
+        b.style.background = rgbStr(fill);
+        b.style.borderColor = rgbStr(heatColor(heat, Math.min(1, f+0.15)));
+        b.style.setProperty("--dn", readableOn(fill));
       }
       // No hour label in the cell itself -- the heat color already shows
       // how much at a glance, and the exact number appears in the
@@ -2417,6 +3035,7 @@ function fillSettingsInputs(){
   document.getElementById("in-showgoal").checked = state.settings.showGoal !== false;
   document.getElementById("in-showcycle").checked = state.settings.showCycle !== false;
   document.getElementById("in-accent-custom").value = state.settings.accentColor || "#1F6F5C";
+  syncCalColorInput();
   document.getElementById("in-cd-date").value = state.settings.countdownDate || "";
   document.getElementById("cd-datetext").textContent = state.settings.countdownDate ? fmtDMY(state.settings.countdownDate) : "none";
   syncAccentSwatches();
@@ -2431,7 +3050,7 @@ document.getElementById("open-settings").addEventListener("click", function(){
 Object.keys(APPEARANCE).forEach(function(el){
   document.getElementById(el).addEventListener("change", function(){
     state.settings[APPEARANCE[el]] = document.getElementById(el).value;
-    save(true); applyTheme(); renderClock();
+    save(true); applyTheme(); renderClock(); renderCalendar(); syncCalColorInput();
   });
 });
 
@@ -2467,7 +3086,33 @@ document.getElementById("in-accent-custom").addEventListener("input", function()
   state.settings.accent = "custom";
   state.settings.accentColor = document.getElementById("in-accent-custom").value;
   save(true); applyTheme(); syncAccentSwatches();
+  syncCalColorInput(); renderCalendar();   // the calendar follows the accent unless set
 });
+/* Calendar colour: its own pick, or "" to follow the accent. */
+function currentAccentHex(){
+  var c = parseColor(getComputedStyle(document.documentElement).getPropertyValue("--focus")) || [31,111,92];
+  return "#" + c.map(function(v){ return ("0" + v.toString(16)).slice(-2); }).join("");
+}
+function syncCalColorInput(){
+  var own = state.settings.calColor || "";
+  document.getElementById("in-cal-color").value = own || currentAccentHex();
+  document.getElementById("cal-color-reset").hidden = !own;
+}
+document.getElementById("in-cal-color").addEventListener("input", function(){
+  state.settings.calColor = this.value;
+  save(true); syncCalColorInput(); renderCalendar();
+});
+document.getElementById("cal-color-reset").addEventListener("click", function(){
+  state.settings.calColor = "";
+  save(true); syncCalColorInput(); renderCalendar();
+});
+// Light/dark changes (including the device's own, under "Match device") change
+// the surface the heat colours are mixed into.
+if(window.matchMedia){
+  var mqDark = window.matchMedia("(prefers-color-scheme: dark)");
+  var onScheme = function(){ applyTheme(); renderCalendar(); };
+  if(mqDark.addEventListener) mqDark.addEventListener("change", onScheme); else if(mqDark.addListener) mqDark.addListener(onScheme);
+}
 function syncAccentSwatches(){
   var want = (state.settings.accentColor || "").toLowerCase();
   Array.prototype.forEach.call(document.querySelectorAll("#accent-swatches .swatch"), function(x){
@@ -2512,12 +3157,17 @@ function renderCatList(){
   live.forEach(function(c){
     var row = document.createElement("div");
     row.className = "catrow";
-    var swatch = document.createElement("input");
-    swatch.type = "color"; swatch.className = "catcolor"; swatch.value = c.color;
-    swatch.title = "Pick this category's colour";
-    swatch.addEventListener("change", function(){
-      c.color = swatch.value;
-      save(true); renderCatList(); renderAll(); nativeSync();
+    // A big colour dot; tapping it opens a palette under the row. (The bare
+    // native colour input was a small target, and on Android it opens a
+    // clunky system dialog.)
+    var swatch = document.createElement("button");
+    swatch.type = "button"; swatch.className = "catcolor";
+    swatch.style.background = c.color;
+    swatch.setAttribute("aria-label", "Change " + c.name + "'s colour");
+    swatch.setAttribute("aria-expanded", openPaletteFor === c.id);
+    swatch.addEventListener("click", function(){
+      openPaletteFor = openPaletteFor === c.id ? null : c.id;
+      renderCatList();
     });
     var nm = document.createElement("span");
     nm.className = "nm"; nm.textContent = c.name;
@@ -2536,7 +3186,38 @@ function renderCatList(){
       row.appendChild(del);
     }
     list.appendChild(row);
+    if(openPaletteFor === c.id) list.appendChild(buildPalette(c));
   });
+}
+var openPaletteFor = null;
+var CAT_COLORS = ["#1F6F5C","#2E8B57","#4A7A33","#3F7A8C","#2F6F9A","#43648F","#5B5FC7",
+                  "#6B5B95","#8E4585","#B5456B","#C0392B","#9C4B2A","#D4881F","#8A6D1F","#5D6D7E"];
+function setCatColor(c, color){
+  c.color = color;
+  save(true); renderCatList(); renderAll(); nativeSync();
+}
+function buildPalette(c){
+  var wrap = document.createElement("div");
+  wrap.className = "catpalette";
+  CAT_COLORS.forEach(function(col){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pal";
+    b.style.background = col;
+    b.setAttribute("aria-label", col);
+    b.setAttribute("aria-pressed", (c.color || "").toLowerCase() === col.toLowerCase());
+    b.addEventListener("click", function(){ setCatColor(c, col); });
+    wrap.appendChild(b);
+  });
+  // Anything else: the native picker, as a labelled control rather than a dot.
+  var lab = document.createElement("label");
+  lab.className = "pal-custom";
+  lab.textContent = "Custom…";
+  var inp = document.createElement("input");
+  inp.type = "color"; inp.value = c.color;
+  inp.addEventListener("change", function(){ setCatColor(c, inp.value); });
+  lab.appendChild(inp);
+  wrap.appendChild(lab);
+  return wrap;
 }
 document.getElementById("cat-add").addEventListener("click", function(){
   var inp = document.getElementById("newcat");
@@ -2617,6 +3298,21 @@ document.getElementById("cd-clear").addEventListener("click", function(){
   document.getElementById("in-cd-date").value = "";
   document.getElementById("cd-datetext").textContent = "none";
 });
+// Any tap on a date box opens the picker (see .datewrap in the CSS).
+Array.prototype.forEach.call(document.querySelectorAll(".datewrap"), function(w){
+  var inp = w.querySelector('input[type="date"]');
+  w.tabIndex = 0;
+  w.setAttribute("role", "button");
+  function open(){
+    try{ if(inp.showPicker){ inp.showPicker(); return; } }catch(e){}
+    // Very old browsers: let the input itself take the tap instead.
+    inp.style.pointerEvents = "auto"; inp.focus(); inp.click();
+  }
+  w.addEventListener("click", open);
+  w.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); }
+  });
+});
 // Quick chips tally up into the Hours/Minutes fields (capped at 24h).
 document.getElementById("man-chips").addEventListener("click", function(e){
   var b = e.target.closest(".chip"); if(!b) return;
@@ -2647,7 +3343,7 @@ var dayEditKey = null;
 function setDaySeconds(k, catId, secs){
   var cur = (state.days[k] || {})[catId] || 0;
   if(Math.round(cur/60) === Math.round(secs/60)) return;
-  adjust(k, "d", catId, secs - cur);
+  adjust(k, "d", catId, secs - cur, true);
 }
 function openDayEditor(k){
   if(!k) return;
@@ -2657,21 +3353,112 @@ function openDayEditor(k){
   var rows = document.getElementById("day-rows");
   rows.innerHTML = "";
   var rec = state.days[k] || {};
-  state.categories.filter(function(c){return !c.archived;}).forEach(function(c){
-    var cur = rec[c.id] || 0;
+  // Current categories, plus any that have time on this day even if they've
+  // since been removed -- otherwise a removed category's past days couldn't be
+  // corrected at all.
+  var ids = state.categories.filter(function(c){ return !c.archived; }).map(function(c){ return c.id; });
+  Object.keys(rec).forEach(function(id){ if(ids.indexOf(id) < 0 && rec[id] >= 30) ids.push(id); });
+  ids.forEach(function(cid){
+    var c = getCat(cid);
+    var cur = rec[cid] || 0;
     var h = Math.floor(cur/3600), m = Math.round((cur%3600)/60);
     if(m === 60){ h++; m = 0; }
     var row = document.createElement("div");
     row.className = "dayrow";
-    row.setAttribute("data-cid", c.id);
+    row.setAttribute("data-cid", cid);
     row.innerHTML =
-      '<span class="dot" style="background:'+catColor(c.id)+'"></span>' +
-      '<span class="nm">'+escapeHtml(c.name)+'</span>' +
+      '<span class="dot" style="background:'+catColor(cid)+'"></span>' +
+      '<span class="nm">'+escapeHtml(catName(cid))+(c && c.archived ? ' <span class="muted-tag">removed</span>' : '')+'</span>' +
       '<input type="number" class="d-h" min="0" max="24" inputmode="numeric" onfocus="this.select()" value="'+h+'"><span class="unit">h</span>' +
       '<input type="number" class="d-m" min="0" max="59" inputmode="numeric" onfocus="this.select()" value="'+m+'"><span class="unit">m</span>';
     rows.appendChild(row);
   });
-  dlgDay.showModal();
+  renderDayDevices(k);
+  if(!dlgDay.open) dlgDay.showModal();
+}
+/* Which device logged what on day k. Mainly a repair tool: a day doubled by
+   two devices both counting the same session shows up as two similar rows,
+   and "Don't count" removes one of them (as a correction in this device's own
+   record, so it syncs like any other edit). */
+function renderDayDevices(k){
+  var box = document.getElementById("day-devices");
+  box.innerHTML = "";
+  var dl = state.log[k] || {}, rows = [];
+  // Discounts can have been made on any device (each in its own corrections
+  // record); only ones made here can be undone here.
+  var excluded = {}, mineX = (dl[DEVICE + EDIT] || {}).x || {};
+  Object.keys(dl).forEach(function(dev){
+    if(isEditRec(dev)) for(var ex in (dl[dev].x || {})) excluded[ex] = 1;
+  });
+  Object.keys(dl).forEach(function(dev){
+    if(isEditRec(dev)) return;   // corrections, not study time
+    var r = dl[dev], t = recTotal(r);
+    if(t < 30) return;
+    rows.push({ dev: dev, t: t,
+      name: dev === BASE ? "Synced before 4.4" : dev === DEVICE ? (r.n || deviceName()) + " (this device)" : (r.n || "Another device") });
+  });
+  if(rows.length < 2) return;   // nothing to compare
+  var h = document.createElement("p");
+  h.className = "hint";
+  h.style.margin = "14px 0 6px";
+  h.textContent = "Logged by device. If one session was counted on two devices, don't count one of them.";
+  box.appendChild(h);
+  rows.sort(function(a, b){ return b.t - a.t; }).forEach(function(x){
+    var off = !!excluded[x.dev];
+    if(off && !mineX[x.dev]){
+      // Discounted on another device: show it, but the undo lives there.
+      var r0 = document.createElement("div");
+      r0.className = "devrow off";
+      r0.innerHTML = '<span class="nm">' + escapeHtml(x.name) + ' <span class="muted-tag">not counted</span></span><span class="v">' + fmtHM(x.t) + '</span>';
+      box.appendChild(r0);
+      return;
+    }
+    var row = document.createElement("div");
+    row.className = "devrow" + (off ? " off" : "");
+    row.innerHTML = '<span class="nm">' + escapeHtml(x.name) + (off ? ' <span class="muted-tag">not counted</span>' : '') +
+      '</span><span class="v">' + fmtHM(x.t) + '</span>';
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "linklike"; b.textContent = off ? "Count again" : "Don't count";
+    b.addEventListener("click", function(){
+      if(off){ restoreDevice(k, x.dev); afterDeviceEdit(k, "Counting " + x.name + " again."); return; }
+      confirmDialog("Don't count the " + fmtHM(x.t) + " from " + x.name + " on this day?", function(){
+        discountDevice(k, x.dev);
+        afterDeviceEdit(k, "Removed " + fmtHM(x.t) + " from " + x.name + ".");
+      });
+    });
+    row.appendChild(b);
+    box.appendChild(row);
+  });
+}
+// Cancel device `dev`'s time on day k with a correction in our own record,
+// remembering exactly what was taken so it can be undone.
+function discountDevice(k, dev){
+  var r = (state.log[k] || {})[dev] || {}, taken = { d: {}, tt: {} }, id, before;
+  for(id in (r.d || {})) if(r.d[id] > 0){
+    before = (state.days[k] || {})[id] || 0;
+    adjust(k, "d", id, -r.d[id], true);
+    taken.d[id] = before - ((state.days[k] || {})[id] || 0);
+  }
+  for(id in (r.tt || {})) if(r.tt[id] > 0){
+    before = (state.taskTime[k] || {})[id] || 0;
+    adjust(k, "tt", id, -r.tt[id], true);
+    taken.tt[id] = before - ((state.taskTime[k] || {})[id] || 0);
+  }
+  var own = ownRec(k, true);
+  own.x = own.x || {};
+  own.x[dev] = taken;
+}
+function restoreDevice(k, dev){
+  var own = ownRec(k, true), taken = (own.x || {})[dev], id;
+  if(!taken) return;
+  for(id in (taken.d || {})) adjust(k, "d", id, taken.d[id], true);
+  for(id in (taken.tt || {})) adjust(k, "tt", id, taken.tt[id], true);
+  delete own.x[dev];
+}
+function afterDeviceEdit(k, msg){
+  save(true); renderAll(); nativeSync();
+  openDayEditor(k);
+  note(msg);
 }
 document.getElementById("bd-edit").addEventListener("click", function(){ openDayEditor(selectedDay); });
 document.getElementById("day-cancel").addEventListener("click", function(){ dlgDay.close(); });
@@ -2693,8 +3480,8 @@ document.getElementById("day-clear").addEventListener("click", function(){
     // Cancel out everything this device currently sees for the day, as an
     // adjustment in its own record -- so the clear syncs like any other edit.
     var d = state.days[k] || {}, t = state.taskTime[k] || {}, id;
-    for(id in d) adjust(k, "d", id, -d[id]);
-    for(id in t) adjust(k, "tt", id, -t[id]);
+    for(id in d) adjust(k, "d", id, -d[id], true);
+    for(id in t) adjust(k, "tt", id, -t[id], true);
     save(true); dlgDay.close(); renderAll(); nativeSync();
     note("Day cleared.");
   });
@@ -2719,6 +3506,26 @@ document.getElementById("stylebtn").addEventListener("click", function(){
   save(true); renderClock();
 });
 document.getElementById("addtask").addEventListener("click", addTask);
+/* Scrolling the To-do list. The page itself never scrolls on tablet/desktop
+   layouts, so wheeling over the card's header, input or footer used to do
+   nothing -- only the list's own box (and its thin scrollbar) scrolled.
+   Forward the wheel from anywhere on the card to the list. */
+(function(){
+  var card = document.getElementById("taskcard"), list = document.getElementById("tasklist");
+  function updateMore(){
+    var more = list.scrollHeight - list.clientHeight - list.scrollTop > 4;
+    list.classList.toggle("more", more);
+  }
+  card.addEventListener("wheel", function(e){
+    if(list.contains(e.target) || e.ctrlKey) return;   // the list scrolls itself
+    if(list.scrollHeight <= list.clientHeight) return;  // nothing to scroll
+    list.scrollTop += e.deltaMode === 1 ? e.deltaY*32 : e.deltaY;
+    e.preventDefault();
+  }, { passive: false });
+  list.addEventListener("scroll", updateMore, { passive: true });
+  window.addEventListener("resize", updateMore);
+  window.__updateTaskMore = updateMore;
+})();
 document.getElementById("newtask").addEventListener("keydown", function(e){
   if(e.key === "Enter") addTask();
 });
@@ -2733,9 +3540,38 @@ document.getElementById("next").addEventListener("click", function(){
 Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){
   b.addEventListener("click", function(){ showPage(b.getAttribute("data-page")); });
 });
+/* Overview calendar from the keyboard: arrows move a day (up/down a week),
+   crossing into the next/previous month as needed; Home jumps to today;
+   Enter edits the selected day; Escape goes back to the month view. */
+function moveSelectedDay(delta){
+  var base;
+  if(selectedDay) base = parseKey(selectedDay);
+  else{
+    var t = new Date();
+    base = (t.getFullYear() === viewY && t.getMonth() === viewM) ? t : new Date(viewY, viewM, 1);
+    delta = 0;   // first press just selects a starting day
+  }
+  var d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + delta);
+  selectedDay = key(d);
+  viewY = d.getFullYear(); viewM = d.getMonth();
+  renderStats(); renderCalendar(); renderBreakdown();
+  var cell = document.querySelector('#grid .day[aria-label^="' + selectedDay + '"]');
+  if(cell) cell.focus({ preventScroll: true });
+}
+function overviewShowing(){
+  var p = document.getElementById("page-overview");
+  return p && p.classList.contains("on");
+}
 document.addEventListener("keydown", function(e){
-  if(e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if(e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
   if(document.querySelector("dialog[open]")) return;
+  if(overviewShowing() && !e.altKey && !e.ctrlKey && !e.metaKey){
+    var step = { ArrowLeft:-1, ArrowRight:1, ArrowUp:-7, ArrowDown:7 }[e.key];
+    if(step !== undefined){ e.preventDefault(); moveSelectedDay(step); return; }
+    if(e.key === "Home"){ e.preventDefault(); selectedDay = null; var t = new Date(); viewY = t.getFullYear(); viewM = t.getMonth(); moveSelectedDay(0); return; }
+    if(e.key === "Enter" && selectedDay){ e.preventDefault(); openDayEditor(selectedDay); return; }
+    if(e.key === "Escape" && selectedDay){ e.preventDefault(); selectedDay = null; renderCalendar(); renderBreakdown(); return; }
+  }
   if(e.code === "Space"){ e.preventDefault(); toggle(); }
   else if(e.key === "r" || e.key === "R"){ resetBlock(); }
   else if(e.key === "f" || e.key === "F"){ setFullscreen(!fsOn); }
@@ -2776,27 +3612,63 @@ window.__closeTopDialog = function(){
    true and adopt that instead of trusting this page's own possibly-stale
    mode/running/remaining. Only those three adopt; state.* (stats, tasks,
    categories) is untouched, so nothing here risks double-counting time. */
+function labelMode(l){ return l === "Short break" ? "shortBreak" : l === "Long break" ? "longBreak" : "focus"; }
+/* Returns true if the service had a timer to adopt.
+   This used to adopt only the service's CURRENT block. But when a focus block
+   ends while the app is backgrounded, the service rolls straight on to the
+   break -- so the page woke up in "break", and the rest of that focus block
+   (often most of it) was never logged. The service now keeps a numbered record
+   of every block it finished; those are credited here first, each exactly once
+   (liveSeq), then the current block is adopted as before. */
 function adoptNativeState(){
-  if(!NATIVE) return;
-  var raw;
-  try{ raw = window.AndroidTimer.getServiceState(); }catch(e){ return; }
-  if(!raw) return;
-  var s;
-  try{ s = JSON.parse(raw); }catch(e){ return; }
-  mode = s.label === "Short break" ? "shortBreak" : s.label === "Long break" ? "longBreak" : "focus";
+  var s = serviceSnapshot();
+  if(!s) return false;
+  var lv = null;
+  try{ lv = JSON.parse(localStorage.getItem(LIVE_KEY) || "null"); }catch(e){}
+  if(lv){
+    // Cold start: pick up where this page left off.
+    if(liveSid === null){ liveSeq = lv.seq || 0; liveSid = lv.sid || null; }
+    if(!runAt && lv.runAt) runAt = lv.runAt;
+    if(!runSegs.length && Array.isArray(lv.segs)) runSegs = lv.segs;
+  }
+  // Blocks the service finished on its own since this page last accounted --
+  // all of them if this is a different service instance than we last saw.
+  var from = (liveSid !== null && liveSid === s.sid) ? liveSeq : 0;
+  var done = (Array.isArray(s.done) ? s.done : []).filter(function(e){ return e.seq > from; });
+  done.forEach(function(e, i){
+    if(labelMode(e.label) !== "focus") return;
+    // The first is the block this page was on: only its unbanked part counts.
+    var banked = (i === 0 && lv && lv.mode === "focus") ? (lv.committed || 0) : 0;
+    var add = (+e.elapsed || 0)/1000 - banked;
+    if(add > 0) bankAt(+e.end || Date.now(), add);
+    state.completed++;
+  });
+  liveSeq = s.seq || 0;
+  liveSid = s.sid || null;
+
+  // A Pause/Resume pressed on the notification while the page was frozen is a
+  // deliberate action: let it count as one for sync (see touchTimer).
+  if(!done.length && lv && !!lv.running === !!s.paused){
+    touchTimer();
+    if(!s.paused){ runAt = state.meta.timer; runSegs = []; mirror = null; }
+  }
+
+  // Now the block the service is on.
+  mode = labelMode(s.label);
   document.body.classList.toggle("rest", mode !== "focus");
-  // Recover how much of this block was already banked (the live snapshot is
-  // written for the app too), so commitElapsed below credits only the time
-  // that elapsed while the WebView wasn't around to tick -- no double count.
-  try{
-    var lv = JSON.parse(localStorage.getItem(LIVE_KEY) || "null");
-    var lvMatch = lv && lv.mode === mode;
-    blockCommitted = lvMatch ? (lv.committed || 0) : 0;
-    blockLen = (lvMatch && lv.len) ? lv.len : modeSeconds(mode);
-  }catch(e){ blockCommitted = 0; blockLen = modeSeconds(mode); }
+  var same = !done.length && lv && lv.mode === mode;
+  blockCommitted = same ? (lv.committed || 0) : 0;
+  // The page's own length for a block it knows; the service's only for a block
+  // the service started itself. (The service's totalMs goes stale on a pause --
+  // it keeps the previous block's length -- and adopting that froze logging.)
+  blockLen = (same && lv.len) ? lv.len : s.totalMs > 0 ? s.totalMs/1000 : modeSeconds(mode);
+  var spent = false;
   if(s.paused){
     running = false;
     remaining = Math.max(0, s.pausedRemaining/1000);
+    // Paused at 0 = the service finished this block and had nothing queued.
+    // It's already among `done`, so don't credit it a second time below.
+    if(remaining <= 0){ blockCommitted = blockLen; spent = done.length > 0; }
   }else{
     running = true;
     remaining = Math.max(0, (s.endTime - Date.now())/1000);
@@ -2804,9 +3676,22 @@ function adoptNativeState(){
   lastTick = Date.now();
   nativeLive = true;
   commitElapsed();
-  if(!s.paused && remaining <= 0){ blockFinished(); }
-  renderClock(); renderModeButtons();
+  if(spent){
+    // Move on to the next block, paused, as the page would have.
+    var next = mode !== "focus" ? "focus"
+      : (state.completed % state.settings.cycles === 0) ? "longBreak" : "shortBreak";
+    setMode(next, false);
+  }else if(!s.paused && remaining <= 0){
+    blockFinished();
+  }
+  saveLiveTimer();
+  save(true);
+  renderAll();
+  return true;
 }
+// MainActivity calls this from onResume, which -- unlike visibilitychange --
+// reliably fires every time the app comes back to the foreground.
+window.__nativeResume = function(){ adoptNativeState(); };
 window.addEventListener("beforeunload", function(){ save(true); });
 document.addEventListener("visibilitychange", function(){
   if(document.hidden) save(true); else restoreLiveTimer();
@@ -2830,6 +3715,7 @@ function updateWakeLock(){
 
 /* ---------- go ---------- */
 load();
+rememberFields();   // baseline, so the very first local change gets stamped
 initSync();
 var now0 = new Date();
 viewY = now0.getFullYear(); viewM = now0.getMonth();
