@@ -686,44 +686,37 @@
     #calcard .breakdown{margin-top:14px;flex:none}
   }
 
-  /* ---- clock card that's wide and short: face on the left, controls right ----
-     Decided by the CARD's own shape (container query), not the device: stacked
-     controls under the face left it tiny (or zero) on short screens -- a
-     landscape phone, a 960x600 tablet, a small laptop window. Applies wherever
-     the card has a definite size (the no-scroll layouts). */
-  @container clock (min-aspect-ratio:6/5) and (max-height:640px){
-    .clockwrap{display:grid !important;height:100%;
-      grid-template-columns:auto minmax(0,1fr);
+  /* ---- clock card that's very wide and short (landscape phones) ----
+     Only here does the face go beside the controls: stacking can't fit. The two
+     halves -- the face with its time just under it, and the controls -- are each
+     a tight group, sized normally, and centred in the card together with even
+     space around them. Tablets, laptops and desktops keep the stacked clock. */
+  @container clock (min-aspect-ratio:7/4) and (max-height:420px){
+    #page-clock .card .clockwrap{display:grid;height:100%;padding-top:0;
+      grid-template-columns:auto auto;justify-content:center;
       grid-template-rows:1fr auto auto auto auto auto 1fr;
       grid-template-areas:"disp ." "disp mode" "disp mirror" "disp ctrl" "disp goal" "disp extra" "disp .";
-      column-gap:clamp(14px,4cqw,56px);row-gap:clamp(6px,2.5cqh,12px);justify-items:center;align-items:center;
-      padding-top:0 !important}
-    /* The corner icons join the right-hand column (a corner would collide with
-       the mode tabs here). */
-    .clockextras{position:static;grid-area:extra;margin:0}
-    .clockdisplay{grid-area:disp;align-self:stretch;height:100%;width:min(calc(100cqh - 64px), calc(100cqw - 300px), 54cqw);
-      display:grid;grid-template-rows:1fr auto auto;grid-template-columns:minmax(0,1fr);place-items:center;gap:2px;margin:0}
-    /* Sized from the column WIDTH (the column is already capped by the card height
-       minus the caption rows), and stronger than the stacked layout's height-based
-       rule -- otherwise the face spilled past its column into the controls. */
-    #page-clock .clockdisplay .face{width:100% !important;height:auto !important;aspect-ratio:1/1;max-width:100%;max-height:100%;min-height:0;margin:0}
-    .mode-row{grid-area:mode;margin:0;flex-wrap:nowrap} .mirrornote{grid-area:mirror;margin:0}
-    .controls{grid-area:ctrl;margin:0;flex-wrap:nowrap} .goalwrap{grid-area:goal;width:100%;max-width:420px;margin:0}
-    .mode-row button,.controls button{white-space:nowrap}
-    .mode-row button{padding:6px 12px}
+      column-gap:clamp(20px,7cqw,64px);row-gap:clamp(8px,3.2cqh,14px);align-items:center;justify-items:center}
+    #page-clock .card .clockdisplay{grid-area:disp;align-self:center;flex:none;height:auto;
+      width:min(calc(100cqh - 66px), calc(100cqw - 320px));
+      display:grid;grid-template-rows:auto auto auto;grid-template-columns:minmax(0,1fr);place-items:center;gap:2px;margin:0}
+    #page-clock .card .clockdisplay .face{width:100% !important;height:auto !important;aspect-ratio:1/1;max-width:none;min-height:0;margin:0}
+    #page-clock .card .clockdisplay .tod{margin-top:2px}
+    #page-clock .card .clockdisplay .timeleft-slot{min-height:0}
+    #page-clock .card .clockextras{position:static;grid-area:extra;margin:0}
+    #page-clock .card .mode-row{grid-area:mode;margin:0;flex-wrap:nowrap}
+    #page-clock .card .mirrornote{grid-area:mirror;margin:0}
+    #page-clock .card .controls{grid-area:ctrl;margin:0;flex-wrap:nowrap}
+    #page-clock .card .goalwrap{grid-area:goal;width:100%;min-width:240px;margin:0}
+    #page-clock .card .mode-row button,#page-clock .card .controls button{white-space:nowrap}
   }
-
-  /* ...and when that card is really short (small landscape phones), tighter
-     controls so the right-hand column still fits. */
-  @container clock (min-aspect-ratio:6/5) and (max-height:300px){
-    .mode-row button{padding:4px 10px;font-size:12px}
-    .controls button{padding:7px 14px;font-size:13.5px}
-    .goalmeta{font-size:11px;margin-top:3px}
-    .cicon{width:28px;height:28px}
-    .tod{font-size:12px;margin-top:2px}
-    /* Compact controls need less width, and the captions under the face less
-       height -- give both back to the face. */
-    .clockdisplay{width:min(calc(100cqh - 40px), calc(100cqw - 250px), 56cqw)}
+  /* Really short (small landscape phones): slightly tighter, same composition. */
+  @container clock (min-aspect-ratio:7/4) and (max-height:280px){
+    #page-clock .card .mode-row button{padding:5px 10px;font-size:12px}
+    #page-clock .card .controls button{padding:8px 16px;font-size:13.5px}
+    #page-clock .card .goalmeta{font-size:11px;margin-top:3px}
+    #page-clock .card .cicon{width:28px;height:28px}
+    #page-clock .card .clockdisplay{width:min(calc(100cqh - 60px), calc(100cqw - 290px))}
   }
 
   /* ---- portrait phone: a full-height clock, categories as a slim strip ----
