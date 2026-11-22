@@ -3464,6 +3464,9 @@ var sceneShown = null,     // the progress the scene is showing now
     sceneTimer = 0, sceneLast = 0, glassKey = "";
 var SCENE_BACK_MS = 3*60*1000;
 var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+// "Preview the day" (Settings > Scenes) is a tool for checking scenes while
+// building them: only on the local dev server, never in the app or website.
+var DEV_PREVIEW = ["localhost", "127.0.0.1", "[::1]"].indexOf(location.hostname) >= 0;
 function scenesReady(){ return !!(window.Scenes && Scenes.mount); }
 function sceneTimeMode(){ return state.settings.sceneDrive === "time" && scenesReady() && Scenes.supportsTime(sceneId); }
 function sceneTarget(){
@@ -3598,7 +3601,7 @@ function renderSceneGallery(){
   document.getElementById("scene-blurb").textContent = blurb;
   var has = cur !== "none";
   document.getElementById("f-scene-drive").hidden = !(has && scenesReady() && Scenes.supportsTime(cur));
-  document.getElementById("f-scene-preview").hidden = !has;
+  document.getElementById("f-scene-preview").hidden = !has || !DEV_PREVIEW;
   document.getElementById("in-scene-drive").value = state.settings.sceneDrive || "goal";
   document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
   document.getElementById("in-scene-clock").value = state.settings.sceneClock === "regular" ? "regular" : "minimal";
