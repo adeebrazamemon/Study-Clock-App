@@ -823,16 +823,38 @@
   body.scene .card{box-shadow:0 10px 30px -12px rgba(0,0,0,.35)}
   body.scene .footer{border:1px solid var(--glass-line);border-radius:var(--radius);padding:9px 14px;width:fit-content;max-width:100%}
   body.scene header.top h1{color:var(--scene-ink);text-shadow:0 1px 12px var(--scene-shadow)}
-  /* Full screen is where a scene shows best: the clock floats in one glass
-     panel in the middle, smaller, with the whole scene around it. */
+  /* Full screen is where a scene shows best. The clock floats in the middle
+     with the scene all around it, in one of two looks (Settings > Scenes):
+       sc-min  (default) a small dark-glass card: mode, the time in thin digits,
+               today's progress. Its tint (--sc-a) is the lightest that keeps
+               its white text readable over the scene (see updateGlass).
+       regular the usual clock face, in a glass panel. */
+  .sclock{display:none}
   body.scene.fs .card{background:none;border:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
   body.scene.fs #page-clock .clockwrap{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:auto !important;height:auto !important;min-height:0 !important;
-    max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:clamp(18px,3.5vh,34px) clamp(22px,4vw,44px);
+    max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px)}
+  body.scene.fs:not(.sc-min) #page-clock .clockwrap{padding:clamp(18px,3.5vh,34px) clamp(22px,4vw,44px);
     border-radius:28px;background:var(--glass-soft,var(--glass));border:1px solid var(--glass-line);gap:clamp(10px,2vh,22px);
     -webkit-backdrop-filter:blur(20px) saturate(1.15);backdrop-filter:blur(20px) saturate(1.15);
     box-shadow:0 24px 60px -24px rgba(0,0,0,.5)}
-  body.scene.fs .face{width:min(62vw,44vh)!important;height:min(62vw,44vh)!important}
-  body.scene.fs .controls{opacity:1}
+  body.scene.fs:not(.sc-min) .face{width:min(62vw,44vh)!important;height:min(62vw,44vh)!important}
+  body.scene.fs:not(.sc-min) .controls{opacity:1}
+
+  body.scene.fs.sc-min #page-clock .clockwrap{top:46%;padding:0;background:none;gap:18px}
+  body.scene.fs.sc-min #page-clock .clockdisplay,body.scene.fs.sc-min .goalwrap,body.scene.fs.sc-min .mirrornote{display:none !important}
+  body.scene.fs.sc-min .sclock{display:block;width:min(340px,calc(100vw - 48px));padding:22px 26px 20px;border-radius:22px;text-align:center;color:#fff;
+    background:rgba(8,10,20,var(--sc-a,.32));border:1px solid rgba(255,255,255,.16);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 20px 50px -20px rgba(0,0,0,.55)}
+  .sclock .sc-lbl{font-size:12.5px;letter-spacing:.16em;text-transform:uppercase}
+  .sclock .sc-t{font-size:clamp(56px,9vh,80px);font-weight:200;font-variant-numeric:tabular-nums;line-height:1.1;margin:6px 0 14px;letter-spacing:.01em}
+  .sclock .sc-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.22);overflow:hidden}
+  .sclock .sc-bar i{display:block;height:100%;width:0;background:#fff;border-radius:2px;transition:width .6s}
+  .sclock .sc-goal{font-size:12.5px;margin-top:9px}
+  /* Its buttons: quiet glass, faded until you touch (as in plain full screen). */
+  body.scene.fs.sc-min .controls{gap:10px}
+  body.scene.fs.sc-min .controls button{background:rgba(8,10,20,var(--sc-a,.32));color:#fff;border:1px solid rgba(255,255,255,.2);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:9px 18px;box-shadow:none}
+  body.scene.fs.sc-min .controls button.primary{background:rgba(255,255,255,.22);font-weight:600}
 
   /* Scene picker (Settings > Scenes). */
   .scenegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:10px;margin-bottom:12px}
@@ -934,6 +956,13 @@
           <div class="tod" id="tod">--:--</div>
         </div>
 
+        <!-- The minimal clock shown in full screen when a scene is on. -->
+        <div class="sclock" id="sclock" aria-hidden="true">
+          <div class="sc-lbl" id="sc-lbl">Focus</div>
+          <div class="sc-t" id="sc-t">25:00</div>
+          <div class="sc-bar"><i id="sc-bar"></i></div>
+          <div class="sc-goal" id="sc-goal"></div>
+        </div>
         <div class="mirrornote" id="mirrornote" hidden></div>
         <div class="controls">
           <button class="primary" id="startstop">Start</button>
@@ -1069,6 +1098,9 @@
     <p class="scene-blurb" id="scene-blurb"></p>
     <div class="field" id="f-scene-drive"><label for="in-scene-drive">Sky follows</label>
       <select id="in-scene-drive"><option value="goal">Your daily goal</option><option value="time">Time of day</option></select>
+    </div>
+    <div class="field" id="f-scene-clock"><label for="in-scene-clock">Full-screen clock</label>
+      <select id="in-scene-clock"><option value="minimal">Minimal card</option><option value="regular">Regular clock</option></select>
     </div>
     <div class="field"><label for="in-scene-motion">Movement</label><input type="checkbox" id="in-scene-motion"></div>
     <div class="field-col" id="f-scene-preview"><label for="in-scene-preview">Preview the day <span class="hint" id="scene-preview-val"></span></label>
@@ -2090,7 +2122,7 @@ var state = {
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
             showGoal:true, showCycle:true, countdownDate:"", calColor:"",
-            scene:"none", sceneDrive:"goal", sceneMotion:true},
+            scene:"none", sceneDrive:"goal", sceneMotion:true, sceneClock:"minimal"},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
   // Logged time lives in `log` (see the ledger section): per day, one record
@@ -3259,6 +3291,7 @@ function applyTheme(){
   document.body.classList.toggle("no-goal", s.showGoal === false);
   document.body.classList.toggle("no-cycle", s.showCycle === false);
 
+  document.body.classList.toggle("sc-min", s.sceneClock !== "regular");
   syncScene();   // after the colours above: the glass is worked out from them
 }
 function cycleTheme(){
@@ -3362,6 +3395,13 @@ function updateGlass(){
     if(tones.every(function(t){ var bg = mixRgb(t, surf, a2); return contrastRatio(ink, bg) >= 4.5 && contrastRatio(muted, bg) >= 3; })) break;
   }
   root.style.setProperty("--glass-soft", "rgba(" + surf.join(",") + "," + Math.min(a, a2).toFixed(2) + ")");
+  // The full-screen scene clock: white text on a dark tint, as light a tint as
+  // keeps the small label and goal line at 4.5:1 over every scene colour.
+  var tint = [8,10,20], a3 = 0.22;
+  for(; a3 < 0.8; a3 += 0.02){
+    if(tones.every(function(t){ return contrastRatio([255,255,255], mixRgb(t, tint, a3)) >= 4.5; })) break;
+  }
+  root.style.setProperty("--sc-a", a3.toFixed(2));
   // Coloured text: readable on the glass too, not just on a solid card.
   [["--focus-text", "--focus"], ["--rest-text", "--rest"], ["--warn-text", "--warn"]].forEach(function(p){
     var c = parseColor(cs.getPropertyValue(p[1]));
@@ -3411,6 +3451,8 @@ function renderSceneGallery(){
   document.getElementById("f-scene-preview").hidden = !has;
   document.getElementById("in-scene-drive").value = state.settings.sceneDrive || "goal";
   document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
+  document.getElementById("in-scene-clock").value = state.settings.sceneClock === "regular" ? "regular" : "minimal";
+  document.getElementById("f-scene-clock").hidden = !has;
   var pv = document.getElementById("in-scene-preview");
   if(scenePreview === null) pv.value = Math.round((sceneShown || 0)*1000);
   document.getElementById("scene-preview-val").textContent = Math.round(pv.value/10) + "%";
@@ -3491,6 +3533,18 @@ function renderClock(){
   var digits = document.getElementById("digits");
   digits.textContent = label;
   digits.style.display = (state.settings.showTimeLeft === false) ? "none" : "";
+
+  // The minimal scene clock (full screen with a scene on).
+  if(document.body.classList.contains("scene") && fsOn){
+    var paused = !running && remaining < (blockLen || modeSeconds(mode)) - 0.5;
+    document.getElementById("sc-lbl").textContent =
+      (mode === "focus" ? "Focus" : mode === "shortBreak" ? "Short break" : "Long break") + (paused ? " · Paused" : "");
+    document.getElementById("sc-t").textContent = label;
+    var todayRec = state.days[key(new Date())] || {}, todaySecs = 0, goalSecs = Math.max(1, state.settings.goal*3600);
+    for(var tc in todayRec) todaySecs += todayRec[tc];
+    document.getElementById("sc-bar").style.width = Math.min(100, todaySecs/goalSecs*100) + "%";
+    document.getElementById("sc-goal").textContent = fmtHM(todaySecs) + " of " + fmtShort(goalSecs) + " today";
+  }
 
   var total = blockLen || modeSeconds(mode) || 1;
   var frac = Math.max(0, Math.min(1, remaining/total));
@@ -4344,6 +4398,10 @@ document.getElementById("scenebtn").addEventListener("click", function(){
 document.getElementById("in-scene-drive").addEventListener("change", function(){
   state.settings.sceneDrive = document.getElementById("in-scene-drive").value;
   save(true); sceneShown = null; stepScene(); renderSceneGallery();
+});
+document.getElementById("in-scene-clock").addEventListener("change", function(){
+  state.settings.sceneClock = document.getElementById("in-scene-clock").value;
+  save(true); applyTheme(); renderClock();
 });
 document.getElementById("in-scene-motion").addEventListener("change", function(){
   state.settings.sceneMotion = document.getElementById("in-scene-motion").checked;
