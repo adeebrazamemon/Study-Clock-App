@@ -134,18 +134,26 @@
 
   /* ---------- clock ---------- */
   .clockwrap{text-align:center;padding:14px 14px 20px}
-  .mode-row{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
+  /* The top of the clock card: the mode (Pomodoro / Lock in) as a segmented
+     control, and under it that mode's own row -- Focus / Short / Long break
+     for Pomodoro, last and best run for Lock in. */
+  .modehead{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:18px}
+  .kindrow{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--bg)}
+  .kindrow button{border:none;background:none;border-radius:999px;padding:6px 16px;font:inherit;font-size:13.5px;font-weight:600;
+    color:var(--muted);cursor:pointer;white-space:nowrap;transition:background-color .15s,color .15s,box-shadow .15s}
+  .kindrow button:hover{color:var(--ink)}
+  .kindrow button[aria-checked="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.16),0 0 0 1px var(--line)}
+  .mode-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
   .mode-row button{
     background:none;border:1px solid var(--line);border-radius:999px;
     padding:7px 15px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
   }
   .mode-row button[aria-pressed="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus-text);font-weight:600}
-  /* A thin divider sets Lock in apart from the Pomodoro tabs. */
-  .mode-row .msep{flex:none;width:1px;align-self:stretch;margin:4px 3px;background:var(--line)}
-  /* Narrow cards: "Short" and "Long" so all four tabs stay on one line. */
-  @container clock (max-width:439px){ .mode-row .mb{display:none} }
-  /* Same in the side-by-side landscape-phone layout, where the tabs share a column. */
-  @container clock (min-aspect-ratio:7/4) and (max-height:420px){ .mode-row .mb{display:none} }
+  /* Lock in: the tab row shows your last and best run instead of the tabs. */
+  .lockstats{display:none;align-items:center;justify-content:center;gap:18px;min-height:33px;font-size:13px;color:var(--muted);white-space:nowrap}
+  .lockstats b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;margin-left:5px}
+  body.lockin .mode-row button{display:none}
+  body.lockin .lockstats{display:flex}
   /* Lock in has no Reset (the session just ends). */
   body.lockin #reset{display:none !important}
 
@@ -203,7 +211,7 @@
 
   /* ---------- full screen ---------- */
   body.fs .shell{padding:0;max-width:none}
-  body.fs .tabs,body.fs header.top,body.fs .mode-row,body.fs .cyclenote,
+  body.fs .tabs,body.fs header.top,body.fs .modehead,body.fs .cyclenote,
   body.fs #chipcard,body.fs .clockextras,body.fs .todayline{display:none!important}
   /* .sidebar (Categories + To-do, merged in here on wide screens) predates
      this rule -- without it, .clockwrap goes position:fixed below but the
@@ -520,8 +528,8 @@
     border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);cursor:pointer}
   .cicon:hover{color:var(--ink);border-color:var(--muted)}
   .cicon svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-  /* A narrow card has no room beside the mode tabs: give the icons a slim row. */
-  @container clock (max-width:439px){ .clockwrap{padding-top:34px} }
+  /* A very narrow card has no room beside the mode switch: give the icons a slim row. */
+  @container clock (max-width:299px){ .clockwrap{padding-top:34px} }
   /* Very narrow (small phones): keep the three mode tabs on one line -- wrapped
      onto two they pushed Start below the fold. */
   @container clock (max-width:300px){
@@ -616,7 +624,7 @@
       height:100%;display:flex;flex-direction:column;
       align-items:center;justify-content:center;gap:clamp(6px,1.4dvh,18px);
     }
-    #page-clock.on .mode-row,#page-clock.on .clockdisplay,#page-clock.on .controls,
+    #page-clock.on .modehead,#page-clock.on .clockdisplay,#page-clock.on .controls,
     #page-clock.on .goalwrap,#page-clock.on .cyclenote,#page-clock.on .clockextras{margin:0}
     #page-clock.on .goalwrap{width:100%;max-width:520px}
     /* THE proper fit: the clock face absorbs whatever vertical space is left
@@ -708,8 +716,8 @@
   @container clock (min-aspect-ratio:7/4) and (max-height:420px){
     #page-clock .card .clockwrap{display:grid;height:100%;padding-top:0;
       grid-template-columns:auto auto;justify-content:center;
-      grid-template-rows:1fr auto auto auto auto auto 1fr;
-      grid-template-areas:"disp ." "disp mode" "disp mirror" "disp ctrl" "disp goal" "disp extra" "disp .";
+      grid-template-rows:1fr auto auto auto auto 1fr;
+      grid-template-areas:"disp ." "disp mode" "disp mirror" "disp ctrl" "disp goal" "disp .";
       column-gap:clamp(20px,7cqw,64px);row-gap:clamp(8px,3.2cqh,14px);align-items:center;justify-items:center}
     #page-clock .card .clockdisplay{grid-area:disp;align-self:center;flex:none;height:auto;
       width:min(calc(100cqh - 66px), calc(100cqw - 320px));
@@ -717,17 +725,25 @@
     #page-clock .card .clockdisplay .face{width:100% !important;height:auto !important;aspect-ratio:1/1;max-width:none;min-height:0;margin:0}
     #page-clock .card .clockdisplay .tod{margin-top:2px}
     #page-clock .card .clockdisplay .timeleft-slot{min-height:0}
-    #page-clock .card .clockextras{position:static;grid-area:extra;margin:0}
-    #page-clock .card .mode-row{grid-area:mode;margin:0;flex-wrap:nowrap}
+    /* The mode switch and the corner icons share one row; the tabs (or the
+       lock-in runs) go under it. */
+    #page-clock .card .clockextras{position:static;grid-area:extras;margin:0}
+    #page-clock .card .modehead{grid-area:mode;margin:0;display:grid;grid-template-columns:auto auto;
+      grid-template-areas:"kind extras" "tabs tabs";gap:6px 10px;align-items:center;justify-items:center}
+    #page-clock .card .kindrow{grid-area:kind}
+    #page-clock .card .mode-row{grid-area:tabs}
+    #page-clock .card .mode-row{flex-wrap:nowrap}
+    #page-clock .card .kindrow button{padding:5px 12px;font-size:12.5px}
     #page-clock .card .mirrornote{grid-area:mirror;margin:0}
-    #page-clock .card .controls{grid-area:ctrl;margin:0;flex-wrap:nowrap}
+    #page-clock .card .controls{grid-area:ctrl;margin:0;flex-wrap:nowrap;gap:8px}
+    #page-clock .card .controls button{padding:8px 13px;font-size:13.5px}
     #page-clock .card .goalwrap{grid-area:goal;width:100%;min-width:240px;margin:0}
     #page-clock .card .mode-row button,#page-clock .card .controls button{white-space:nowrap}
   }
   /* Really short (small landscape phones): slightly tighter, same composition. */
   @container clock (min-aspect-ratio:7/4) and (max-height:280px){
     #page-clock .card .mode-row button{padding:5px 10px;font-size:12px}
-    #page-clock .card .controls button{padding:8px 16px;font-size:13.5px}
+    #page-clock .card .controls button{padding:7px 12px;font-size:13px}
     #page-clock .card .goalmeta{font-size:11px;margin-top:3px}
     #page-clock .card .cicon{width:28px;height:28px}
     #page-clock .card .clockdisplay{width:min(calc(100cqh - 60px), calc(100cqw - 290px))}
@@ -753,7 +769,7 @@
     #page-clock.on > .card{flex:1;min-height:0;margin:0;container-type:size;overflow:hidden}
     #page-clock.on .clockwrap{height:100%;display:flex;flex-direction:column;align-items:center;
       justify-content:center;gap:clamp(6px,1.6dvh,16px)}
-    #page-clock.on .mode-row,#page-clock.on .controls,#page-clock.on .goalwrap,#page-clock.on .mirrornote{margin:0;flex:none}
+    #page-clock.on .modehead,#page-clock.on .controls,#page-clock.on .goalwrap,#page-clock.on .mirrornote{margin:0;flex:none}
     #page-clock.on .goalwrap{width:100%}
     #page-clock.on .clockdisplay{flex:1 1 0;min-height:0;align-self:stretch;
       display:grid;grid-template-rows:1fr auto auto;grid-template-columns:minmax(0,1fr);place-items:center;gap:4px}
@@ -764,12 +780,23 @@
   @container clock (max-width:439px){
     .mode-row{flex-wrap:nowrap}
     .mode-row button{padding:6px 11px;font-size:12.5px}
+    .modehead{gap:6px}
+    .kindrow button{padding:5px 13px;font-size:13px}
+    /* Start / Reset / Skip break stay on one line (wrapped, they cost the face a row). */
+    .controls{flex-wrap:nowrap;gap:8px}
+    .controls button{padding-left:15px;padding-right:15px;white-space:nowrap}
   }
-  /* ...and when that leaves room for the corner icons on the same line, put
-     them side by side instead of giving the icons their own row. */
-  @container clock (min-width:330px) and (max-width:439px){
+  @container clock (max-width:330px){ .kindrow button{padding:5px 11px;font-size:12.5px} }
+  /* Wide cards: the mode switch and its tabs on one line, like a toolbar (the
+     corner icons sit at the right end of it), so the face keeps that height. */
+  @container clock (min-width:620px){
+    .modehead{flex-direction:row;align-self:stretch;justify-content:flex-start;gap:14px}
+  }
+  /* ...and the mode switch shares its line with the corner icons (left and
+     right) instead of the icons taking a row of their own. */
+  @container clock (min-width:300px) and (max-width:439px){
     .clockwrap{padding-top:0}
-    .mode-row{align-self:flex-start}
+    .modehead{align-self:flex-start;align-items:flex-start}
   }
   /* A short stacked card (small phones): tighter controls, so the face keeps
      the height. */
@@ -953,12 +980,26 @@
   <div class="page" id="page-clock">
     <section class="card">
       <div class="clockwrap" id="clockwrap">
-        <div class="mode-row">
-          <button id="m-focus" aria-pressed="true">Focus</button>
-          <button id="m-short" aria-pressed="false">Short<span class="mb"> break</span></button>
-          <button id="m-long" aria-pressed="false">Long<span class="mb"> break</span></button>
-          <span class="msep" aria-hidden="true"></span>
-          <button id="m-lock" aria-pressed="false" title="Lock in: no timer, no breaks -- it counts up until you end it">Lock in</button>
+        <div class="modehead">
+          <!-- Small corner icons: scenes, analog/digital (shows the style it
+               switches to; filled in by buildFace), full screen. Pinned to the
+               card's top-right corner; on landscape phones they sit beside the
+               mode switch instead. -->
+          <div class="clockextras">
+            <button type="button" class="cicon" id="scenebtn" title="Scenes" aria-label="Scenes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19l6-9 4 5.5 2.5-3L21 19z"/><circle cx="16.5" cy="6.5" r="2"/></svg></button>
+            <button type="button" class="cicon" id="stylebtn" title="Switch to analog clock" aria-label="Switch to analog clock"></button>
+            <button type="button" class="cicon" id="fsbtn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5"/></svg></button>
+          </div>
+          <div class="kindrow" role="radiogroup" aria-label="Mode">
+            <button type="button" role="radio" data-kind="pomodoro" aria-checked="true" title="Focus blocks with breaks in between">Pomodoro</button>
+            <button type="button" role="radio" data-kind="lockin" aria-checked="false" title="No timer, no breaks: it counts up until you end it">Lock in</button>
+          </div>
+          <div class="mode-row">
+            <button id="m-focus" aria-pressed="true">Focus</button>
+            <button id="m-short" aria-pressed="false">Short break</button>
+            <button id="m-long" aria-pressed="false">Long break</button>
+            <div class="lockstats" id="lockstats"><span>Last run<b id="lock-last">--</b></span><span>Best run<b id="lock-best">--</b></span></div>
+          </div>
         </div>
 
         <!-- Grouped so the three stay visually tight together while
@@ -994,14 +1035,6 @@
         <div class="goalwrap" id="goalwrap">
           <div class="goalbar" id="goalbar"></div>
           <div class="goalmeta"><span id="goalnow">0h 00m</span><span class="cyclenote" id="cyclenote">Session 1 of 4</span><span id="goalof">of 4h</span></div>
-        </div>
-
-        <!-- Small corner icons: full screen, and analog/digital (shows the style
-             it switches to; filled in by buildFace). -->
-        <div class="clockextras">
-          <button type="button" class="cicon" id="scenebtn" title="Scenes" aria-label="Scenes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19l6-9 4 5.5 2.5-3L21 19z"/><circle cx="16.5" cy="6.5" r="2"/></svg></button>
-          <button type="button" class="cicon" id="stylebtn" title="Switch to analog clock" aria-label="Switch to analog clock"></button>
-          <button type="button" class="cicon" id="fsbtn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5"/></svg></button>
         </div>
       </div>
     </section>
@@ -2953,7 +2986,8 @@ function fmtElapsed(secs){
 }
 // A lock-in just ended after `secs`: keep the longest (synced with settings).
 function lockInEnded(secs){
-  if(secs < 60) return;
+  if(secs < 60) return;   // a false start, not a run
+  state.settings.lockLast = Math.round(secs);
   var best = +state.settings.lockBest || 0;
   if(secs > best){
     state.settings.lockBest = Math.round(secs);
@@ -3716,9 +3750,8 @@ function renderClock(){
   renderGoalBar();
   var done = state.completed % state.settings.cycles, cn = document.getElementById("cyclenote");
   if(lock){
-    var best = +state.settings.lockBest || 0;
-    cn.textContent = best >= 60 ? "Longest: " + fmtDur(best) : "No lock-in yet";
-    cn.title = "Your longest lock-in";
+    // The last and best run show where the tabs are (see renderModeButtons).
+    cn.textContent = ""; cn.title = "";
   }else{
     cn.textContent = "Session " + (done+1) + " of " + state.settings.cycles;
     cn.title = "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
@@ -4033,7 +4066,15 @@ function renderModeButtons(){
   document.getElementById("m-focus").setAttribute("aria-pressed", mode==="focus");
   document.getElementById("m-short").setAttribute("aria-pressed", mode==="shortBreak");
   document.getElementById("m-long").setAttribute("aria-pressed", mode==="longBreak");
-  document.getElementById("m-lock").setAttribute("aria-pressed", mode==="lockin");
+  // The mode switch, and Lock in's last / best run.
+  var kind = mode === "lockin" ? "lockin" : "pomodoro";
+  if(kind === "pomodoro") lastPomo = mode;
+  Array.prototype.forEach.call(document.querySelectorAll(".kindrow button"), function(b){
+    b.setAttribute("aria-checked", b.getAttribute("data-kind") === kind);
+  });
+  var last = +state.settings.lockLast || 0, best = +state.settings.lockBest || 0;
+  document.getElementById("lock-last").textContent = last >= 60 ? fmtDur(last) : "--";
+  document.getElementById("lock-best").textContent = best >= 60 ? fmtDur(best) : "--";
 }
 
 /* ---------- full screen ---------- */
@@ -5256,7 +5297,16 @@ document.getElementById("endblock").addEventListener("click", endBlock);
 document.getElementById("m-focus").addEventListener("click", function(){ selectMode("focus"); });
 document.getElementById("m-short").addEventListener("click", function(){ selectMode("shortBreak"); });
 document.getElementById("m-long").addEventListener("click", function(){ selectMode("longBreak"); });
-document.getElementById("m-lock").addEventListener("click", function(){ selectMode("lockin"); });
+// The mode switch. Pomodoro comes back to whichever of its tabs you were on.
+var lastPomo = "focus";
+Array.prototype.forEach.call(document.querySelectorAll(".kindrow button"), function(b){
+  b.addEventListener("click", function(){
+    var want = b.getAttribute("data-kind"), cur = mode === "lockin" ? "lockin" : "pomodoro";
+    if(want === cur) return;
+    if(running){ note(cur === "lockin" ? "End the lock-in first." : "Pause the timer first."); return; }
+    selectMode(want === "lockin" ? "lockin" : (lastPomo || "focus"));
+  });
+});
 document.getElementById("lockend-keep").addEventListener("click", function(){ document.getElementById("dlg-lockend").close(); });
 document.getElementById("lockend-ok").addEventListener("click", function(){
   document.getElementById("dlg-lockend").close();
