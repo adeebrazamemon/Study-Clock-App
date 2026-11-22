@@ -282,6 +282,32 @@
   .stat .trend.up{color:var(--focus-text)}
   .stat .trend.down{color:var(--warn-text)}
   .stat .trend.flat{color:var(--muted);font-weight:500}
+  /* Last 7 days: hours per day, stacked by category, with the daily target. */
+  .weekchart{position:relative;margin-top:16px;flex:none}
+  .weekchart h3{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em;text-transform:uppercase;margin:0 0 8px}
+  .weekchart svg{display:block;width:100%;height:128px;overflow:visible}
+  #dlg-week .weekchart{margin-top:4px}
+  #dlg-week .weekchart svg{height:200px}
+  .wk-sum{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .stat.wk-open{cursor:pointer}
+  .stat.wk-open:hover .l{color:var(--ink)}
+  /* Fit-to-screen layouts (tablets, laptops) have no spare height for it: it's
+     a tap on "This week" there, and inline again on a tall desktop window. */
+  @media (min-width:600px) and (min-height:600px){ #statcard .weekchart{display:none} }
+  @media (min-width:760px) and (min-height:880px) and (min-aspect-ratio:801/1000){ #statcard .weekchart{display:block} }
+  .weekchart .wk-col{cursor:default}
+  .wk-legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;font-size:12px;color:var(--muted)}
+  .wk-legend span{display:inline-flex;align-items:center;gap:5px;min-width:0}
+  .wk-legend i{flex:none;width:8px;height:8px;border-radius:2px}
+  .wk-tip{position:absolute;z-index:5;pointer-events:none;transform:translate(-50%,calc(-100% - 8px));width:max-content;max-width:260px;
+    background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+    font-size:12px;line-height:1.45;white-space:nowrap;box-shadow:0 10px 26px -12px rgba(0,0,0,.45)}
+  .wk-tip b{font-weight:600}
+  .wk-tip .r{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  .wk-tip .r i{width:8px;height:8px;border-radius:2px;flex:none}
+  .wk-tip .r em{font-style:normal;margin-left:auto;padding-left:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+  /* No room on a short landscape phone: the tiles and calendar come first. */
+  @media (max-height:599px) and (min-aspect-ratio:5/4){ #statcard .weekchart{display:none} }
 
   /* ---------- calendar ---------- */
   .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -918,9 +944,15 @@
       <h2>Where the hours went</h2>
       <div class="statgrid">
         <div class="stat"><div class="n" id="s-today">0h</div><div class="l">Today</div></div>
-        <div class="stat"><div class="n" id="s-week">0h</div><div class="l">This week</div><div class="trend" id="s-week-trend"></div></div>
+        <div class="stat wk-open" role="button" tabindex="0" title="Show the last 7 days"><div class="n" id="s-week">0h</div><div class="l">This week</div><div class="trend" id="s-week-trend"></div></div>
         <div class="stat"><div class="n" id="s-month">0h</div><div class="l">This month</div></div>
         <div class="stat"><div class="n" id="s-days">0</div><div class="l">Days studied</div></div>
+      </div>
+      <div class="weekchart" id="weekchart">
+        <h3>Last 7 days</h3>
+        <svg class="wk-svg" role="img"></svg>
+        <div class="wk-legend"></div>
+        <div class="wk-tip" hidden></div>
       </div>
     </section>
 
@@ -1221,6 +1253,20 @@
   <div class="dialog-actions">
     <button class="ghost" id="confirm-cancel">Cancel</button>
     <button class="primary" id="confirm-ok">Remove</button>
+  </div>
+</dialog>
+
+<!-- The last 7 days, larger (tap "This week" on the Overview). -->
+<dialog id="dlg-week">
+  <h2>Last 7 days</h2>
+  <div class="weekchart">
+    <p class="wk-sum"></p>
+    <svg class="wk-svg" role="img"></svg>
+    <div class="wk-legend"></div>
+    <div class="wk-tip" hidden></div>
+  </div>
+  <div class="dialog-actions">
+    <button class="primary" id="week-close">Done</button>
   </div>
 </dialog>
 
@@ -4473,7 +4519,127 @@ function renderStats(){
     tEl.textContent = (up ? "▲ +" : "▼ −") + fmtShort(Math.abs(diff)) + " vs last week";
     tEl.className = "trend " + (up ? "up" : "down");
   }
+  renderWeekChart();
 }
+
+/* Last 7 days, ending today: one bar per day, stacked by category (always in
+   the category list's order, so a colour belongs to its category, not to a
+   rank), against a dashed line at the daily target. Hover or tap a day for its
+   breakdown (today's total is already the Today tile above). */
+var WK_NS = "http://www.w3.org/2000/svg";
+// Each chart lives in a .weekchart root (the one in the stats card, and the one
+// in the "Last 7 days" dialog) with its own .wk-svg, .wk-legend and .wk-tip.
+function weekCharts(){ return document.querySelectorAll(".weekchart"); }
+function renderWeekChart(){ Array.prototype.forEach.call(weekCharts(), drawWeekChart); }
+function drawWeekChart(root){
+  var svg = root.querySelector(".wk-svg");
+  var w = svg.clientWidth, H = svg.clientHeight || 128;
+  if(!w) return;   // not on screen (hidden by the layout, or the dialog is closed)
+  var order = state.categories.map(function(c){ return c.id; });
+  var byOrder = function(a, b){ var ia = order.indexOf(a), ib = order.indexOf(b); return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib); };
+  var today = new Date(); today.setHours(12, 0, 0, 0);
+  var days = [], maxS = 0, used = {};
+  for(var i = 6; i >= 0; i--){
+    var d = new Date(today); d.setDate(today.getDate() - i);
+    var k = key(d), rec = state.days[k] || {}, ids = Object.keys(rec).filter(function(c){ return rec[c] > 0; }).sort(byOrder);
+    var tot = 0; ids.forEach(function(c){ tot += rec[c]; used[c] = 1; });
+    days.push({k:k, d:d, ids:ids, rec:rec, tot:tot, today:i === 0});
+    maxS = Math.max(maxS, tot);
+  }
+  root._days = days;
+  var goal = Math.max(1, state.settings.goal*3600);
+  var top = Math.max(goal*1.15, maxS*1.08);
+  var padT = 16, padB = 20, padR = 30, plotH = H - padT - padB, plotW = w - padR;
+  var y = function(s){ return padT + plotH*(1 - s/top); };
+  var slot = plotW/7, bw = Math.max(6, Math.min(30, slot*.5));
+  root._slot = slot;
+  svg.setAttribute("viewBox", "0 0 " + w + " " + H);
+  svg.innerHTML = "";
+  var mk = function(tag, a){ var e = document.createElementNS(WK_NS, tag); for(var n in a) e.setAttribute(n, a[n]); svg.appendChild(e); return e; };
+  // Baseline, then the target line with its label.
+  mk("line", {x1:0, x2:plotW, y1:y(0) + .5, y2:y(0) + .5, stroke:"var(--line)", "stroke-width":1});
+  var gy = Math.round(y(goal)) + .5;
+  mk("line", {x1:0, x2:plotW, y1:gy, y2:gy, stroke:"var(--muted)", "stroke-width":1, "stroke-dasharray":"3 3", opacity:.7});
+  mk("text", {x:plotW + 5, y:gy + 3.5, "font-size":11, fill:"var(--muted)"}).textContent = fmtShort(goal);
+  var DOW = ["S", "M", "T", "W", "T", "F", "S"];
+  days.forEach(function(day, i){
+    var cx = slot*i + slot/2, x = cx - bw/2, yy = y(0);
+    // Stack up from the baseline, a 2px gap between segments; the top one gets
+    // the rounded end.
+    day.ids.forEach(function(c, j){
+      if(j) yy -= 2;
+      var h = Math.max(0, plotH*day.rec[c]/top - (j ? 2 : 0)), t = yy - h;
+      var r = j === day.ids.length - 1 ? Math.min(4, h, bw/2) : 0;
+      mk("path", {fill:catColor(c), d:"M" + x + " " + yy + "V" + (t + r) + (r ? "Q" + x + " " + t + " " + (x + r) + " " + t : "") +
+        "H" + (x + bw - r) + (r ? "Q" + (x + bw) + " " + t + " " + (x + bw) + " " + (t + r) : "") + "V" + yy + "Z"});
+      yy = t;
+    });
+    day.topY = yy;   // the tooltip sits just above the bar
+    mk("text", {x:cx, y:H - 5, "text-anchor":"middle", "font-size":11,
+      fill:day.today ? "var(--focus-text)" : "var(--muted)", "font-weight":day.today ? 600 : 400}).textContent = DOW[day.d.getDay()];
+    // The whole column is the hover / tap target, much bigger than the bar.
+    var hit = mk("rect", {x:slot*i, y:0, width:slot, height:H, fill:"transparent", "class":"wk-col", "data-i":i});
+    hit.addEventListener("pointerenter", showWkTip);
+    hit.addEventListener("pointerdown", showWkTip);
+    hit.addEventListener("pointerleave", function(ev){ if(ev.pointerType === "mouse") hideWkTips(); });
+  });
+  if(!maxS) mk("text", {x:plotW/2, y:padT + plotH/2, "text-anchor":"middle", "font-size":12, fill:"var(--muted)"}).textContent = "Nothing logged in the last 7 days";
+  var total = days.reduce(function(a, d){ return a + d.tot; }, 0);
+  svg.setAttribute("aria-label", "Hours studied over the last 7 days: " + days.map(function(d){
+    return d.d.toLocaleDateString(undefined, {weekday:"long"}) + " " + fmtHM(d.tot); }).join(", ") + ". Total " + fmtHM(total) + ".");
+  // Legend: the categories that appear this week, in list order.
+  var lg = root.querySelector(".wk-legend"), shown = Object.keys(used).sort(byOrder);
+  lg.innerHTML = "";
+  lg.hidden = shown.length < 2;   // one category: the bars say it already
+  shown.forEach(function(c){
+    var s = document.createElement("span"), dot = document.createElement("i");
+    dot.style.background = catColor(c); s.appendChild(dot); s.appendChild(document.createTextNode(catName(c)));
+    lg.appendChild(s);
+  });
+  var sum = root.querySelector(".wk-sum");
+  if(sum) sum.textContent = fmtHM(total) + " in total · " + fmtHM(total/7) + " a day on average";
+  root.querySelector(".wk-tip").hidden = true;
+}
+function showWkTip(e){
+  var root = e.currentTarget.closest(".weekchart"), i = +e.currentTarget.getAttribute("data-i");
+  var day = root && root._days && root._days[i];
+  if(!day) return;
+  hideWkTips();
+  var tip = root.querySelector(".wk-tip"), svg = root.querySelector(".wk-svg");
+  tip.innerHTML = "";
+  var h = document.createElement("div"), b = document.createElement("b");
+  b.textContent = fmtHM(day.tot);
+  h.appendChild(document.createTextNode(day.d.toLocaleDateString(undefined, {weekday:"short", day:"numeric", month:"short"}) + " · "));
+  h.appendChild(b); tip.appendChild(h);
+  day.ids.slice().reverse().forEach(function(c){
+    var r = document.createElement("div"); r.className = "r";
+    var dot = document.createElement("i"); dot.style.background = catColor(c);
+    var em = document.createElement("em"); em.textContent = fmtHM(day.rec[c]);
+    r.appendChild(dot); r.appendChild(document.createTextNode(catName(c))); r.appendChild(em);
+    tip.appendChild(r);
+  });
+  tip.hidden = false;
+  // Centred over the column, kept inside the chart.
+  var wr = root.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+  var cx = sr.left - wr.left + root._slot*i + root._slot/2, half = tip.offsetWidth/2;
+  tip.style.left = Math.max(half, Math.min(wr.width - half, cx)) + "px";
+  tip.style.top = (sr.top - wr.top + (day.topY || 0)) + "px";
+}
+function hideWkTips(){ Array.prototype.forEach.call(document.querySelectorAll(".wk-tip"), function(t){ t.hidden = true; }); }
+// On touch the tip stays until you tap somewhere else.
+document.addEventListener("pointerdown", function(e){ if(!e.target.closest || !e.target.closest(".wk-col")) hideWkTips(); }, {passive:true});
+if(window.ResizeObserver){
+  var wkRO = new ResizeObserver(function(entries){ entries.forEach(function(en){ drawWeekChart(en.target.closest(".weekchart")); }); });
+  Array.prototype.forEach.call(document.querySelectorAll(".wk-svg"), function(s){ wkRO.observe(s); });
+}
+// Tap "This week" for the chart in its own window (on screens where the stats
+// card has no room for it inline, that's the way to see it).
+var dlgWeek = document.getElementById("dlg-week");
+function openWeek(){ dlgWeek.showModal(); drawWeekChart(dlgWeek.querySelector(".weekchart")); }
+var weekTile = document.getElementById("s-week").closest(".stat");
+weekTile.addEventListener("click", openWeek);
+weekTile.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openWeek(); } });
+document.getElementById("week-close").addEventListener("click", function(){ dlgWeek.close(); });
 
 /* Calendar heat colour: the calendar's own colour if one is set, otherwise the
    accent. A day is that colour mixed into the card surface by how much of the
