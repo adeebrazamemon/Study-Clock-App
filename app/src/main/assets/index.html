@@ -803,9 +803,51 @@
       box-shadow:0 0 0 1.5px var(--cal-mark, var(--focus)), 0 12px 20px -8px rgba(0,0,0,.55), 0 3px 6px -3px rgba(0,0,0,.35)}
     .card{transition:box-shadow .2s}
   }
+
+  /* ---------- scenes ----------
+     A drawn scene fills the window behind the app (#scenebg). Cards turn to
+     frosted glass; --glass is computed in updateGlass() as the clearest tint
+     that still keeps every text colour readable over the scene behind it. */
+  #scenebg{position:fixed;inset:0;z-index:0;pointer-events:none;display:none;overflow:hidden}
+  body.scene{background:#10141a}
+  body.scene #scenebg{display:block}
+  body.scene .shell{position:relative;z-index:1}
+  body.scene .card,body.scene .ovpill,body.scene .tabs,body.scene header.top .iconbtn,body.scene .footer{
+    background:var(--glass);border-color:var(--glass-line);
+    -webkit-backdrop-filter:blur(18px) saturate(1.15);backdrop-filter:blur(18px) saturate(1.15)}
+  body.scene .card{box-shadow:0 10px 30px -12px rgba(0,0,0,.35)}
+  body.scene .footer{border:1px solid var(--glass-line);border-radius:var(--radius);padding:9px 14px;width:fit-content;max-width:100%}
+  body.scene header.top h1{color:var(--scene-ink);text-shadow:0 1px 12px var(--scene-shadow)}
+  /* Full screen is where a scene shows best: the clock floats in one glass
+     panel in the middle, smaller, with the whole scene around it. */
+  body.scene.fs .card{background:none;border:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+  body.scene.fs .clockwrap{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:auto;height:auto;
+    max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:clamp(18px,3.5vh,34px) clamp(22px,4vw,44px);
+    border-radius:28px;background:var(--glass);border:1px solid var(--glass-line);gap:clamp(10px,2vh,22px);
+    -webkit-backdrop-filter:blur(20px) saturate(1.15);backdrop-filter:blur(20px) saturate(1.15);
+    box-shadow:0 24px 60px -24px rgba(0,0,0,.5)}
+  body.scene.fs .face{width:min(62vw,44vh)!important;height:min(62vw,44vh)!important}
+  body.scene.fs .controls{opacity:1}
+
+  /* Scene picker (Settings > Scenes). */
+  .scenegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:10px;margin-bottom:12px}
+  .scenecard{display:flex;flex-direction:column;gap:6px;padding:0;background:none;border:none;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+  .scthumb{display:block;position:relative;aspect-ratio:16/10;border-radius:10px;overflow:hidden;border:1px solid var(--line);
+    background:linear-gradient(160deg,var(--bg),var(--surface))}
+  .scthumb.plain::after{content:"";position:absolute;left:14%;right:14%;top:22%;bottom:22%;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
+  .scenecard .nm{font-size:13.5px;padding-left:2px}
+  .scenecard[aria-pressed="true"] .scthumb{outline:2.5px solid var(--focus);outline-offset:2px}
+  .scenecard[aria-pressed="true"] .nm{color:var(--focus-text);font-weight:600}
+  .scenecard:focus-visible{outline:none}
+  .scenecard:focus-visible .scthumb{outline:2.5px solid var(--ink);outline-offset:2px}
+  .scene-blurb{color:var(--muted);font-size:13px;margin:0 0 14px;min-height:2.6em}
+  .field-col input[type=range]{width:100%;accent-color:var(--focus)}
+  /* While picking a scene, dim the page behind the dialog less so you can see it. */
+  #dlg-settings.scenes-open::backdrop{background:rgba(0,0,0,.12)}
 </style>
 </head>
 <body>
+<div id="scenebg" aria-hidden="true"></div>
 <div class="shell">
 
   <header class="top">
@@ -903,6 +945,7 @@
         <!-- Small corner icons: full screen, and analog/digital (shows the style
              it switches to; filled in by buildFace). -->
         <div class="clockextras">
+          <button type="button" class="cicon" id="scenebtn" title="Scenes" aria-label="Scenes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19l6-9 4 5.5 2.5-3L21 19z"/><circle cx="16.5" cy="6.5" r="2"/></svg></button>
           <button type="button" class="cicon" id="stylebtn" title="Switch to analog clock" aria-label="Switch to analog clock"></button>
           <button type="button" class="cicon" id="fsbtn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5"/></svg></button>
         </div>
@@ -949,6 +992,7 @@
   <div class="dtabs">
     <button data-pane="gen" aria-selected="true">General</button>
     <button data-pane="app" aria-selected="false">Appearance</button>
+    <button data-pane="scene" aria-selected="false">Scenes</button>
     <button data-pane="sync" aria-selected="false">Sync</button>
   </div>
 
@@ -1013,6 +1057,18 @@
     <div class="field"><label for="in-timeleft">Show time left</label><input type="checkbox" id="in-timeleft"></div>
     <div class="field"><label for="in-showgoal">Show progress bar</label><input type="checkbox" id="in-showgoal"></div>
     <div class="field"><label for="in-showcycle">Show session counter</label><input type="checkbox" id="in-showcycle"></div>
+  </div>
+
+  <div class="dpane" id="pane-scene">
+    <div class="scenegrid" id="scenegrid" role="group" aria-label="Scene"></div>
+    <p class="scene-blurb" id="scene-blurb"></p>
+    <div class="field" id="f-scene-drive"><label for="in-scene-drive">Sky follows</label>
+      <select id="in-scene-drive"><option value="goal">Your daily goal</option><option value="time">Time of day</option></select>
+    </div>
+    <div class="field"><label for="in-scene-motion">Movement</label><input type="checkbox" id="in-scene-motion"></div>
+    <div class="field-col" id="f-scene-preview"><label for="in-scene-preview">Preview the day <span class="hint" id="scene-preview-val"></span></label>
+      <input type="range" id="in-scene-preview" min="0" max="1000" value="0">
+    </div>
   </div>
 
   <div class="dpane" id="pane-sync">
@@ -1102,6 +1158,915 @@
 <!-- Compat build, not the modular SDK: this page has no bundler, so it needs
      a plain global `firebase` namespace rather than ES module imports.
      Inert if the network is unreachable; sync just quietly stays unavailable. -->
+<!-- @scenes-begin -->
+<script>
+/* ===================== Scenes =====================
+   Drawn, animated backdrops that move with your day. Each scene is plain SVG
+   built in code (no image files), so it stays sharp at any size.
+
+   Scenes.mount(host, id, {thumb}) -> {update({p, mode, running, motion}), resize(), tones(), destroy()}
+     p        0..1, how far through the day the scene is (the app passes today's
+              share of the daily goal, or the time of day).
+     mode     "focus" | "break"
+     motion   false freezes every animation (and the occasional effects).
+   tones() returns a few colours that sit behind the app's cards, so the app can
+   make its glass just opaque enough for text to stay readable. */
+(function(){
+"use strict";
+var NS = "http://www.w3.org/2000/svg", W = 1600, H = 900, UID = 0;
+
+function el(tag, a, parent){
+  var e = document.createElementNS(NS, tag);
+  if(a) for(var k in a) e.setAttribute(k, a[k]);
+  if(parent) parent.appendChild(e);
+  return e;
+}
+function set(e, a){ for(var k in a) e.setAttribute(k, a[k]); }
+function rng(s){ return function(){ s |= 0; s = s + 0x6D2B79F5 | 0; var t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function noise1(seed){ var r = rng(seed), v = []; for(var i = 0; i < 512; i++) v.push(r());
+  return function(x){ var i = Math.floor(x), f = x - i, u = f*f*(3 - 2*f); return v[i & 511]*(1 - u) + v[(i + 1) & 511]*u; }; }
+function ridge(seed, o){
+  var n = noise1(seed), pts = [], oct = o.oct || 5, env = o.env || function(){ return 1; };
+  for(var x = (o.from == null ? -20 : o.from); x <= (o.to == null ? W + 20 : o.to); x += 5){
+    var y = 0, a = 1, f = 1, nm = 0;
+    for(var k = 0; k < oct; k++){ var v = n(x/o.scale*f + k*37.1); if(o.ridged) v = 1 - Math.abs(2*v - 1); y += v*a; nm += a; a *= .5; f *= 2.07; }
+    pts.push([x, o.base - (y/nm)*o.amp*env(x)]);
+  }
+  return pts;
+}
+function at(pts, x){
+  for(var i = 1; i < pts.length; i++) if(pts[i][0] >= x){ var a = pts[i-1], b = pts[i], t = (x - a[0])/((b[0] - a[0]) || 1); return a[1] + (b[1] - a[1])*t; }
+  return pts[pts.length - 1][1];
+}
+function f1(v){ return Math.round(v*10)/10; }
+function line(pts){ return "M" + pts.map(function(p){ return f1(p[0]) + " " + f1(p[1]); }).join("L"); }
+function poly(pts, bottom){ bottom = bottom == null ? H : bottom; return "M" + pts[0][0] + " " + bottom + "L" + line(pts).slice(1) + "L" + pts[pts.length-1][0] + " " + bottom + "Z"; }
+function pine(x, y, h, w){
+  var t = 5, R = [];
+  for(var i = 1; i <= t; i++){ var yi = y - h + h*.9*i/t, wi = w/2*(.28 + .72*i/t); R.push([x + wi, yi]); if(i < t) R.push([x + wi*.32, yi - h*.025]); }
+  var tw = Math.max(1, w*.06), yb = R[R.length-1][1];
+  var pts = [[x, y - h]].concat(R, [[x + tw, yb], [x + tw, y + 6], [x - tw, y + 6], [x - tw, yb]], R.slice().reverse().map(function(p){ return [2*x - p[0], p[1]]; }));
+  return line(pts) + "Z";
+}
+function forest(pts, o){
+  var r = rng(o.seed), d = "", gap = o.gap || [10, 22], h = o.h || [20, 40];
+  for(var x = (o.from || 0) + r()*gap[0]; x < (o.to == null ? W : o.to); x += gap[0] + r()*(gap[1] - gap[0])){
+    var hh = h[0] + r()*(h[1] - h[0]), w = hh*(.36 + r()*.1);
+    if(o.skip && x > o.skip[0] && x < o.skip[1]) continue;   // keep a clearing open
+    d += pine(x, at(pts, x) + (o.sink == null ? 3 : o.sink), hh, w);
+  }
+  return d;
+}
+function blob(cx, cy, parts){ // several ellipses as one path: [dx, dy, rx, ry]
+  return parts.map(function(b){ var x = cx + b[0], y = cy + b[1], rx = b[2], ry = b[3];
+    return "M" + f1(x - rx) + " " + f1(y) + "a" + rx + " " + ry + " 0 1 0 " + 2*rx + " 0a" + rx + " " + ry + " 0 1 0 " + (-2*rx) + " 0"; }).join("");
+}
+
+/* colour */
+function hex(h){ return [1, 3, 5].map(function(i){ return parseInt(h.slice(i, i + 2), 16); }); }
+function mix(a, b, t){ return a.map(function(v, i){ return v + (b[i] - v)*t; }); }
+function css(c){ return "rgb(" + c.map(function(v){ return Math.round(v); }).join(",") + ")"; }
+function clamp(v, a, b){ a = a == null ? 0 : a; b = b == null ? 1 : b; return Math.min(b, Math.max(a, v)); }
+function smooth(a, b, v){ var t = clamp((v - a)/(b - a)); return t*t*(3 - 2*t); }
+function lerp(a, b, t){ return a + (b - a)*t; }
+function keyed(K, p, keys){ // interpolate a list of {p, ...hex colours} keyframes
+  var i = 1; while(i < K.length - 1 && K[i].p < p) i++;
+  var a = K[i-1], b = K[i], t = smooth(0, 1, (p - a.p)/((b.p - a.p) || 1)), o = {};
+  keys.forEach(function(k){ o[k] = typeof a[k] === "number" ? lerp(a[k], b[k], t) : mix(hex(a[k]), hex(b[k]), t); });
+  return o;
+}
+var WHITE = [255, 255, 255], BLACK = [0, 0, 0];
+
+/* ---------- shared styles (injected once) ---------- */
+var CSS = [
+  ".scn{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:hidden}",
+  ".scn.still *{animation-play-state:paused !important}",
+  ".scn .tw{animation:scTw 3.2s ease-in-out infinite alternate}",
+  "@keyframes scTw{from{opacity:.2}to{opacity:1}}",
+  ".scn .drift{animation:scDrift linear infinite}",
+  "@keyframes scDrift{from{transform:translateX(-700px)}to{transform:translateX(2100px)}}",
+  ".scn .pan{animation:scPan linear infinite}",
+  "@keyframes scPan{to{transform:translateX(-1600px)}}",
+  ".scn .sway{animation:scSway ease-in-out infinite alternate}",
+  "@keyframes scSway{from{transform:translateX(-50px)}to{transform:translateX(50px)}}",
+  ".scn .bob{animation:scBob ease-in-out infinite alternate}",
+  "@keyframes scBob{from{transform:translateY(-3px)}to{transform:translateY(4px)}}",
+  ".scn .birds{animation:scFly 38s linear infinite}",
+  "@keyframes scFly{from{transform:translate(-300px,0)}to{transform:translate(1900px,-140px)}}",
+  ".scn .flap{animation:scFlap .9s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scFlap{from{transform:scaleY(1)}to{transform:scaleY(.4)}}",
+  ".scn .fly{animation:scFloat ease-in-out infinite alternate}",
+  "@keyframes scFloat{0%{transform:translate(0,0);opacity:.1}50%{opacity:1}100%{transform:translate(26px,-30px);opacity:.25}}",
+  ".scn .spin{animation:scSpin linear infinite;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scSpin{to{transform:rotate(360deg)}}",
+  ".scn .sweep{animation:scSweep ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scSweep{from{transform:scaleX(1);opacity:1}to{transform:scaleX(.06);opacity:.35}}",
+  ".scn .breathe{animation:scBreathe 3.6s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center top}",
+  "@keyframes scBreathe{from{transform:scaleX(.82);opacity:.8}to{transform:scaleX(1.12);opacity:1}}",
+  ".scn .smoke{animation:scSmoke 8s linear infinite;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scSmoke{0%{transform:translate(0,0) scale(.35);opacity:0}15%{opacity:.55}100%{transform:translate(50px,-150px) scale(2.4);opacity:0}}",
+  ".scn .rain{animation:scRain .42s linear infinite}",
+  "@keyframes scRain{from{transform:translate(0,0)}to{transform:translate(-60px,300px)}}",
+  ".scn .flow{animation:scFlow linear infinite;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scFlow{0%{transform:translate(0,-14px) scaleX(.6);opacity:0}30%{opacity:.85}100%{transform:translate(0,22px) scaleX(1.2);opacity:0}}",
+  ".scn .grass{animation:scGrass ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center bottom}",
+  "@keyframes scGrass{from{transform:skewX(-5deg)}to{transform:skewX(6deg)}}",
+  ".scn .leafsway{animation:scLeaf 5s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center bottom}",
+  "@keyframes scLeaf{from{transform:rotate(-.6deg)}to{transform:rotate(.8deg)}}",
+  ".scn .swing{animation:scSwing 3.4s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center top}",
+  "@keyframes scSwing{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}",
+  ".scn .ripple{animation:scRipple ease-out infinite;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scRipple{0%{transform:scale(.15);opacity:0}15%{opacity:.9}100%{transform:scale(1.5);opacity:0}}",
+  ".scn .petal{animation:scPetal linear infinite}",
+  "@keyframes scPetal{0%{transform:translate(0,0) rotate(0);opacity:0}10%{opacity:1}100%{transform:translate(-120px,330px) rotate(540deg);opacity:0}}",
+  ".scn .bfly{animation:scBfly ease-in-out infinite alternate}",
+  "@keyframes scBfly{0%{transform:translate(0,0)}33%{transform:translate(70px,-40px)}66%{transform:translate(20px,-80px)}100%{transform:translate(110px,-20px)}}",
+  ".scn .wing{animation:scWing .22s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}",
+  "@keyframes scWing{from{transform:scaleX(1)}to{transform:scaleX(.25)}}"
+].join("\n");
+var cssDone = false;
+function injectCss(){
+  if(cssDone) return; cssDone = true;
+  var s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s);
+}
+
+/* ---------- mounting ---------- */
+function mount(host, id, opts){
+  opts = opts || {};
+  var def = DEFS[id]; if(!def) return null;
+  injectCss();
+  var svg = el("svg", {viewBox:"0 0 1600 900", preserveAspectRatio:"xMidYMid slice", "class":"scn", "aria-hidden":"true", focusable:"false"});
+  host.appendChild(svg);
+  var defs = el("defs", null, svg), uid = "sc" + (++UID) + "-";
+  var ctx = {
+    svg:svg, defs:defs, thumb:!!opts.thumb, motion:!opts.thumb, alive:true, timers:[], state:null,
+    view:{x0:0, x1:W, vw:W, k:1},
+    id:function(n){ return uid + n; },
+    url:function(n){ return "url(#" + uid + n + ")"; },
+    grad:function(type, n, attrs, stops){
+      var g = el(type, Object.assign({id:uid + n}, attrs || {}), defs);
+      return stops.map(function(s){ return el("stop", s, g); });
+    },
+    later:function(fn, ms){
+      var t = setTimeout(function(){ var i = ctx.timers.indexOf(t); if(i >= 0) ctx.timers.splice(i, 1); if(ctx.alive) fn(); }, ms);
+      ctx.timers.push(t);
+    },
+    // Occasional effects only run when someone could see them.
+    lively:function(){ return ctx.alive && ctx.motion && !ctx.thumb && !document.hidden; }
+  };
+  measure(ctx);
+  var inst = def.build(ctx), last = null;
+  var api = {
+    id:id,
+    update:function(s){
+      s = Object.assign({p:0, mode:"focus", running:false, motion:true}, s || {});
+      s.p = clamp(s.p);
+      ctx.motion = !!s.motion && !ctx.thumb;
+      svg.classList.toggle("still", !ctx.motion);
+      var key = Math.round(s.p*1000) + "|" + s.mode + "|" + s.running + "|" + ctx.motion;
+      if(key === last) return;
+      last = key; ctx.state = s;
+      inst.update(s.p, s);
+    },
+    resize:function(){
+      if(measure(ctx) && inst.resize){ inst.resize(); last = null; if(ctx.state) api.update(ctx.state); }
+    },
+    tones:function(){ return inst.tones(); },
+    destroy:function(){ ctx.alive = false; ctx.timers.forEach(clearTimeout); ctx.timers = []; svg.remove(); }
+  };
+  return api;
+}
+// What part of the 1600-wide drawing is on screen (it's cropped to fill).
+function measure(ctx){
+  var r = ctx.svg.getBoundingClientRect();
+  if(!r.width || !r.height) return false;
+  var s = Math.max(r.width/W, r.height/H), vw = r.width/s, x0 = 800 - vw/2;
+  var changed = Math.abs(x0 - ctx.view.x0) > .5 || !ctx.measured;
+  ctx.measured = true;
+  ctx.view = {x0:x0, x1:800 + vw/2, vw:vw, k:Math.min(1, vw/1100)};
+  return changed;
+}
+
+/* ============================================================
+   Valley: the sun sets as you work, night falls, and it rises
+   when you reach your goal.
+   ============================================================ */
+var VALLEY_K = [
+ {p:0,   top:"#3f73b8", mid:"#9cc3e4", hor:"#f7dca6", shade:"#1c3a3c", sun:"#fff3d1", cloud:"#ffffff", glow:.25},
+ {p:.25, top:"#4a6aa8", mid:"#d9a487", hor:"#ffcf86", shade:"#2a2b40", sun:"#ffe1a1", cloud:"#fbe1cf", glow:.5},
+ {p:.42, top:"#2e2f6e", mid:"#d0607a", hor:"#ff9a4f", shade:"#2a1430", sun:"#ffb066", cloud:"#f39a8f", glow:1},
+ {p:.52, top:"#141a3d", mid:"#3d2f62", hor:"#8a4f6e", shade:"#120c1e", sun:"#ff8a50", cloud:"#5a4670", glow:.45},
+ {p:.62, top:"#060914", mid:"#0c1430", hor:"#1b2550", shade:"#03050b", sun:"#ff8a50", cloud:"#1c2440", glow:.04},
+ {p:.80, top:"#060914", mid:"#0d1533", hor:"#202a58", shade:"#03050b", sun:"#ff8a50", cloud:"#1c2440", glow:.04},
+ {p:.90, top:"#1a1f48", mid:"#56407a", hor:"#d27d86", shade:"#150f24", sun:"#ff9a5a", cloud:"#8a6a90", glow:.55},
+ {p:.96, top:"#34539a", mid:"#e5918c", hor:"#ffbe82", shade:"#221a33", sun:"#ffc27a", cloud:"#ffc8b0", glow:1},
+ {p:1,   top:"#4c7cc0", mid:"#f3b48e", hor:"#ffe0a2", shade:"#1f2a3a", sun:"#ffe3a8", cloud:"#ffe6d6", glow:.9}
+];
+function buildValley(ctx){
+  var svg = ctx.svg, R = rng(77);
+  var sky = ctx.grad("linearGradient", "sky", {x1:0, y1:0, x2:0, y2:1}, [{offset:0}, {offset:.55}, {offset:1}]);
+  var sunG = ctx.grad("radialGradient", "sunglow", null, [{offset:0, "stop-opacity":.7}, {offset:.35, "stop-opacity":.22}, {offset:1, "stop-opacity":0}]);
+  var horG = ctx.grad("radialGradient", "horglow", null, [{offset:0, "stop-opacity":.85}, {offset:1, "stop-opacity":0}]);
+  ctx.grad("radialGradient", "moonglow", null, [{offset:0, "stop-color":"#dfe6ff", "stop-opacity":.35}, {offset:1, "stop-color":"#dfe6ff", "stop-opacity":0}]);
+  ctx.grad("radialGradient", "fly", null, [{offset:0, "stop-color":"#fff6b0"}, {offset:.3, "stop-color":"#ffe46a", "stop-opacity":.8}, {offset:1, "stop-color":"#ffd84a", "stop-opacity":0}]);
+  ctx.grad("linearGradient", "ray", {x1:0, y1:0, x2:1, y2:0}, [{offset:0, "stop-color":"#fff2c8", "stop-opacity":0}, {offset:.5, "stop-color":"#fff2c8", "stop-opacity":.3}, {offset:1, "stop-color":"#fff2c8", "stop-opacity":0}]);
+  ctx.grad("linearGradient", "shoot", {x1:0, y1:0, x2:1, y2:0}, [{offset:0, "stop-color":"#fff", "stop-opacity":0}, {offset:1, "stop-color":"#fff", "stop-opacity":1}]);
+  var lake = ctx.grad("linearGradient", "lake", {x1:0, y1:0, x2:0, y2:1}, [{offset:0}, {offset:1}]);
+  var sunCol = ctx.grad("linearGradient", "sunrefl", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-opacity":.95}, {offset:.55, "stop-opacity":.35}, {offset:1, "stop-opacity":0}]);
+  ctx.grad("linearGradient", "moonrefl", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-color":"#eef2ff", "stop-opacity":.75}, {offset:.6, "stop-color":"#dfe6ff", "stop-opacity":.22}, {offset:1, "stop-color":"#dfe6ff", "stop-opacity":0}]);
+  var mist = ctx.grad("linearGradient", "mist", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-opacity":0}, {offset:.5, "stop-opacity":.55}, {offset:1, "stop-opacity":0}]);
+  var blur = el("filter", {id:ctx.id("blur"), x:"-60%", y:"-10%", width:"220%", height:"120%"}, ctx.defs);
+  el("feGaussianBlur", {stdDeviation:5}, blur);
+  var mm = el("mask", {id:ctx.id("moonmask")}, ctx.defs);
+  el("circle", {cx:0, cy:0, r:26, fill:"#fff"}, mm); el("circle", {cx:11, cy:-7, r:23, fill:"#000"}, mm);
+  var clip = el("clipPath", {id:ctx.id("lakeclip")}, ctx.defs);
+  el("rect", {x:0, y:676, width:W, height:H - 676}, clip);
+
+  el("rect", {width:W, height:H, fill:ctx.url("sky")}, svg);
+  var stars = el("g", null, svg);
+  for(var i = 0; i < 190; i++){
+    var c = el("circle", {cx:f1(R()*W), cy:f1(R()*560), r:(.5 + R()*R()*1.8).toFixed(2), fill:"#fff", "class":"tw"}, stars);
+    c.style.animationDelay = (-R()*3.2).toFixed(2) + "s"; c.style.animationDuration = (2 + R()*3).toFixed(2) + "s";
+  }
+  var shootLayer = el("g", null, svg);
+  var horGlow = el("ellipse", {cx:800, cy:600, rx:760, ry:260, fill:ctx.url("horglow")}, svg);
+  var raysAt = el("g", {opacity:0}, svg), rays = el("g", {"class":"spin"}, raysAt);
+  rays.style.animationDuration = "120s";
+  for(i = 0; i < 9; i++){
+    var a = i/9*180 + R()*8, w = 14 + R()*22, len = 700 + R()*400;
+    el("polygon", {points:(-len) + "," + (-w) + " 0,-3 " + len + "," + (-w) + " " + len + "," + w + " 0,3 " + (-len) + "," + w, fill:ctx.url("ray"), transform:"rotate(" + a.toFixed(1) + ")"}, rays);
+  }
+  var sunGlow = el("circle", {r:300, fill:ctx.url("sunglow")}, svg);
+  var sun = el("circle", {r:38}, svg);
+  var moon = el("g", null, svg);
+  el("circle", {r:90, fill:ctx.url("moonglow")}, moon);
+  el("circle", {r:26, fill:"#f3efe2", mask:ctx.url("moonmask")}, moon);
+
+  var clouds = [], cl = el("g", null, svg);
+  [[130, 150, 1], [230, 210, .8], [90, 170, .6], [300, 130, .7]].forEach(function(c){
+    var g = el("g", {"class":"drift"}, cl);
+    g.style.animationDuration = c[1] + "s"; g.style.animationDelay = (-R()*c[1]).toFixed(1) + "s";
+    var inner = el("g", {transform:"translate(0 " + c[0] + ") scale(" + c[2] + ")"}, g);
+    clouds.push(el("path", {d:blob(0, 0, [[0, 0, 90, 26], [60, -18, 60, 30], [120, -4, 80, 24], [-60, 6, 60, 18], [30, 10, 120, 18]])}, inner));
+  });
+  var birdsAt = el("g", null, svg), birds = el("g", {"class":"birds"}, birdsAt);
+  [[0, 0], [26, -10], [40, 8], [62, -4], [80, 12]].forEach(function(b){
+    el("path", {d:"M" + b[0] + " " + (300 + b[1]) + "q6 -7 12 0q6 -7 12 0", fill:"none", stroke:"#1a1424", "stroke-width":2, "stroke-linecap":"round", "class":"flap"}, birds);
+  });
+
+  // Mountains: far to near, each fading into the haze at its foot.
+  var valley = function(x){ return .42 + .58*Math.min(1, Math.abs(x - 760)/700); };
+  var L = [
+    {pts:ridge(11, {base:575, amp:230, scale:260, ridged:true, env:valley}), depth:.28},
+    {pts:ridge(23, {base:620, amp:150, scale:190, ridged:true, env:valley}), depth:.46},
+    {pts:ridge(37, {base:676, amp:85, scale:150, env:function(x){ return .5 + .5*valley(x); }}), depth:.64, trees:{seed:5, gap:[7, 16], h:[14, 30]}}
+  ];
+  var far = el("g", {id:ctx.id("far")}, svg);
+  L.forEach(function(l, i){
+    var minY = Math.min.apply(null, l.pts.map(function(p){ return p[1]; }));
+    l.stops = ctx.grad("linearGradient", "L" + i, {x1:0, y1:minY, x2:0, y2:690, gradientUnits:"userSpaceOnUse"}, [{offset:0}, {offset:1}]);
+    el("path", {d:poly(l.pts) + (l.trees ? forest(l.pts, l.trees) : ""), fill:ctx.url("L" + i)}, far);
+  });
+
+  // The lake mirrors the sky and the mountains.
+  el("rect", {x:0, y:676, width:W, height:H - 676, fill:ctx.url("lake")}, svg);
+  var mirror = el("g", {"clip-path":ctx.url("lakeclip"), opacity:.3}, svg);
+  el("use", {href:"#" + ctx.id("far"), transform:"matrix(1 0 0 -1 0 1352)"}, mirror);
+  var shore = el("rect", {x:0, y:675, width:W, height:2, opacity:.35}, svg);
+  // Light on the water: one soft column under the sun or moon, gently breathing.
+  var reflG = el("g", {"clip-path":ctx.url("lakeclip")}, svg);
+  var sunReflAt = el("g", null, reflG), sunRefl = el("path", {d:"M-60 677H60L22 885H-22Z", fill:ctx.url("sunrefl"), filter:ctx.url("blur"), "class":"breathe"}, sunReflAt);
+  var moonReflAt = el("g", null, reflG);
+  el("path", {d:"M-26 677H26L9 890H-9Z", fill:ctx.url("moonrefl"), filter:ctx.url("blur"), "class":"breathe"}, moonReflAt);
+  el("path", {d:"M-6 677H6L2 820H-2Z", fill:"#f4f6ff", opacity:.45, filter:ctx.url("blur"), "class":"breathe"}, moonReflAt);
+  var mistG = el("g", {"class":"sway"}, svg); mistG.style.animationDuration = "26s";
+  var mistR = el("rect", {x:-200, y:640, width:2000, height:90, fill:ctx.url("mist")}, mistG);
+
+  // Banks either side of the lake, the cabin and its dock, then the framing pines.
+  var near = el("g", null, svg);
+  // The left bank slopes down to the water, with a flat clearing cut into it
+  // where the cabin stands (rebuilt in layout(), since the cabin moves to stay on screen).
+  var slope = function(x){ var t = clamp(x/740); return 560 + Math.pow(t, 1.7)*200 + Math.sin(x/37)*4; };
+  var leftBank = [], CABIN_X = 0, CLEAR_Y = 0;
+  function shapeBank(cx){
+    CABIN_X = cx; CLEAR_Y = slope(cx) + 8; leftBank = [];
+    for(var x = -20; x <= 760; x += 5){
+      var d = Math.abs(x - cx), w = d < 64 ? 1 : 1 - smooth(64, 130, d);
+      leftBank.push([x, lerp(slope(x), CLEAR_Y, w)]);
+    }
+    leftBank.push([800, 830]);
+  }
+  var rightBank = [[1150, 840]]; for(var x = 1190; x <= 1620; x += 5){ var t = clamp((x - 1190)/410); rightBank.push([x, 770 - Math.pow(t, 1.3)*160 + Math.sin(x/29)*4]); }
+  var rightD = poly(rightBank) + forest(rightBank, {seed:14, from:1200, to:1610, gap:[10, 22], h:[40, 110]});
+  var bank = el("path", null, near);
+  var trail = el("path", {fill:"none", "stroke-linecap":"round", "stroke-linejoin":"round"}, near);
+  var dock = el("path", {d:"M730 748h138v5H730z M748 753h4v16h-4z M786 753h4v18h-4z M824 753h4v19h-4z M860 753h4v20h-4z"}, near);
+  var cabinAt = el("g", null, near);
+  var footing = el("path", {d:"M-50 0h100v7h-100z"}, cabinAt);
+  var smokeG = el("g", {filter:ctx.url("blur")}, cabinAt), smoke = [];
+  for(i = 0; i < 6; i++){
+    var s = el("circle", {cx:26, cy:-90, r:7, "class":"smoke"}, smokeG);
+    s.style.animationDelay = (-i*1.33).toFixed(2) + "s"; smoke.push(s);
+  }
+  var cabinBody = el("path", {d:"M-44 0V-46H44V0Z M20 -60h12v-26h-12z"}, cabinAt);
+  var cabinRoof = el("path", {d:"M-54 -44L0 -84L54 -44Z"}, cabinAt);
+  var winOff = el("path", {d:"M-24 -34h18v15h-18z M10 -34h18v15h-18z"}, cabinAt);
+  var winOn = el("path", {d:"M-24 -34h18v15h-18z M10 -34h18v15h-18z", fill:"#ffd27f"}, cabinAt);
+  var mullion = el("path", {d:"M-15 -34v15 M-24 -26.5h18 M19 -34v15 M10 -26.5h18", stroke:"#3a2a1c", "stroke-width":1.6, fill:"none"}, cabinAt);
+  var door = el("path", {d:"M-2 0v-22h9v22z"}, cabinAt);
+  var ground = ridge(51, {base:905, amp:60, scale:120});
+  var front = el("path", null, near);
+  var flies = el("g", null, svg);
+  for(i = 0; i < 26; i++){
+    var fx = R() < .5 ? 40 + R()*620 : 1180 + R()*380, fy = 640 + R()*220;
+    var ff = el("circle", {cx:f1(fx), cy:f1(fy), r:(5 + R()*5).toFixed(1), fill:ctx.url("fly"), "class":"fly"}, flies);
+    ff.style.animationDuration = (3 + R()*4).toFixed(2) + "s"; ff.style.animationDelay = (-R()*6).toFixed(2) + "s";
+  }
+
+  function layout(){
+    var v = ctx.view, k = v.k, fg = poly(ground);
+    [[-30, 760, 230], [60, 620, 190], [150, 470, 150]].forEach(function(p){ var x = v.x0 + p[0]*k; fg += pine(x, at(ground, x) + 20, p[1]*(.75 + .25*k), p[2]*k); });
+    [[30, 800, 240], [-70, 700, 210], [-160, 450, 140]].forEach(function(p){ var x = v.x1 + p[0]*k; fg += pine(x, at(ground, x) + 20, p[1]*(.75 + .25*k), p[2]*k); });
+    front.setAttribute("d", fg);
+    var cx = clamp(v.x0 + v.vw*.2, 400, 640);
+    shapeBank(cx);
+    bank.setAttribute("d", poly(leftBank) + forest(leftBank, {seed:9, from:-10, to:700, gap:[10, 22], h:[46, 120], skip:[cx - 78, cx + 70]}) + rightD);
+    cabinAt.setAttribute("transform", "translate(" + f1(cx) + " " + f1(CLEAR_Y - 2) + ")");
+    // A dirt trail from the door, down the slope to the dock.
+    var pts = [];
+    for(var s = 0; s <= 1.0001; s += .05){
+      var x = lerp(cx + 4, 734, s), y = lerp(CLEAR_Y + 4, 752, s) + Math.sin(s*Math.PI)*16;
+      pts.push([x, Math.max(y, at(leftBank, x) + 5)]);
+    }
+    trail.setAttribute("d", line(pts));
+  }
+  layout();
+
+  function sunPos(p){
+    if(p <= .5){ var t = p/.5; return [lerp(760, 900, t), 170 + (590 - 170)*Math.pow(t, 1.5)]; }
+    if(p >= .9){ t = (p - .9)/.1; return [lerp(640, 600, t), lerp(720, 350, 1 - Math.pow(1 - t, 2))]; }
+    return [800, 1100];
+  }
+  var cur = null, night = 0, R2 = rng(5);
+  function shoot(){
+    var v = ctx.view, x = v.x0 + v.vw*(.12 + R2()*.7), y = 50 + R2()*260;
+    var ang = R2() < .5 ? 14 + R2()*24 : 142 + R2()*24, len = 150 + R2()*90;
+    var g = el("g", {transform:"translate(" + f1(x) + " " + f1(y) + ") rotate(" + f1(ang) + ")"}, shootLayer);
+    var r = el("rect", {x:-len, y:-1.3, width:len, height:2.6, rx:1.3, fill:ctx.url("shoot")}, g);
+    var head = el("circle", {r:2.4, fill:"#fff"}, g);
+    var frames = [{transform:"translateX(0)", opacity:0}, {opacity:1, offset:.15}, {opacity:1, offset:.7}, {transform:"translateX(" + (260 + R2()*160).toFixed(0) + "px)", opacity:0}];
+    var o = {duration:850 + R2()*500, easing:"cubic-bezier(.3,.6,.4,1)"};
+    if(r.animate){ r.animate(frames, o); head.animate(frames, o).onfinish = function(){ g.remove(); }; }
+    else g.remove();
+  }
+  // Shooting stars are rare: at least an hour apart, then a random wait that
+  // averages another hour and a half (so gaps are never even). Once one is due
+  // it waits for night and for the scene to be on screen.
+  var MIN = 60000, rand = Math.random;
+  var gap = function(){ return 60*MIN - Math.log(1 - rand())*90*MIN; };
+  var nextShot = Date.now() + gap()*rand();   // the first can come sooner, anywhere in a normal gap
+  (function loop(){
+    ctx.later(function(){
+      if(Date.now() >= nextShot && ctx.lively() && night > .6 && rand() < .15){ shoot(); nextShot = Date.now() + gap(); }
+      loop();
+    }, 20000);
+  })();
+
+  return {
+    resize:layout,
+    update:function(p){
+      var c = keyed(VALLEY_K, p, ["top", "mid", "hor", "shade", "sun", "cloud", "glow"]);
+      cur = c;
+      set(sky[0], {"stop-color":css(c.top)}); set(sky[1], {"stop-color":css(c.mid)}); set(sky[2], {"stop-color":css(c.hor)});
+      night = smooth(.46, .58, p)*(1 - smooth(.86, .95, p));
+      stars.setAttribute("opacity", night.toFixed(3));
+      var sp = sunPos(p), sx = sp[0], sy = sp[1], low = clamp((sy - 200)/420);
+      set(sun, {cx:sx, cy:sy, r:(34 + 16*low).toFixed(1), fill:css(mix(c.sun, WHITE, .25*(1 - low)))});
+      set(sunGlow, {cx:sx, cy:sy, r:(260 + 200*low).toFixed(0)});
+      sunG.forEach(function(s){ s.setAttribute("stop-color", css(c.sun)); });
+      horGlow.setAttribute("cx", p > .7 ? 620 : sx);
+      horG.forEach(function(s){ s.setAttribute("stop-color", css(c.hor)); });
+      horGlow.setAttribute("opacity", c.glow.toFixed(3));
+      set(raysAt, {opacity:(smooth(.965, 1, p)*.9).toFixed(3), transform:"translate(" + f1(sx) + " " + f1(sy) + ")"});
+
+      var mt = (p - .5)/.42, mv = mt > 0 && mt < 1 ? smooth(0, .12, mt)*(1 - smooth(.85, 1, mt)) : 0, v = ctx.view;
+      var mx = lerp(lerp(v.x0, 800, .3), lerp(v.x1, 800, .3), clamp(mt)), my = 470 - 300*Math.sin(Math.PI*clamp(mt));
+      set(moon, {transform:"translate(" + f1(mx) + " " + f1(my) + ")", opacity:mv.toFixed(3)});
+
+      var cc = css(c.cloud);
+      clouds.forEach(function(cp){ set(cp, {fill:cc, opacity:(.55 + .3*(1 - night)).toFixed(2)}); });
+      birdsAt.setAttribute("opacity", (smooth(.12, .22, p)*(1 - smooth(.44, .5, p))).toFixed(3));
+      flies.setAttribute("opacity", (smooth(.52, .62, p)*(1 - smooth(.84, .9, p))).toFixed(3));
+
+      L.forEach(function(l){ var col = mix(c.hor, c.shade, l.depth); l.stops[0].setAttribute("stop-color", css(col)); l.stops[1].setAttribute("stop-color", css(mix(col, c.hor, .32))); });
+      lake[0].setAttribute("stop-color", css(mix(c.hor, c.shade, .38))); lake[1].setAttribute("stop-color", css(mix(c.mid, c.shade, .72)));
+      shore.setAttribute("fill", css(mix(c.hor, WHITE, .2)));
+      var bankC = mix(c.hor, c.shade, .84), frontC = mix(c.hor, c.shade, .95);
+      bank.setAttribute("fill", css(bankC)); front.setAttribute("fill", css(frontC)); dock.setAttribute("fill", css(mix(bankC, frontC, .5)));
+      // Trail: packed earth, a little lighter than the bank; footing in stone.
+      trail.setAttribute("stroke", css(mix(mix(bankC, [168, 124, 84], .45 - .3*night), c.hor, .12)));
+      trail.setAttribute("stroke-width", 9);
+      footing.setAttribute("fill", css(mix(bankC, [120, 116, 110], .35 - .25*night)));
+
+      // Light on the water.
+      var sunVis = 1 - smooth(470, 560, sy);
+      sunCol.forEach(function(s){ s.setAttribute("stop-color", css(mix(c.sun, WHITE, .2))); });
+      set(sunReflAt, {transform:"translate(" + f1(sx) + " 0)", opacity:(sunVis*.8).toFixed(3)});
+      set(moonReflAt, {transform:"translate(" + f1(mx) + " 0)", opacity:(mv*.9).toFixed(3)});
+      var mistAmt = Math.max(1 - Math.abs(p - .52)/.1, 1 - Math.abs(p - .9)/.08, 0);
+      mist.forEach(function(s){ s.setAttribute("stop-color", css(mix(c.hor, WHITE, .45))); });
+      mistR.setAttribute("opacity", (smooth(0, 1, mistAmt)*.7).toFixed(3));
+
+      // Cabin: warm windows from sunset until the sun is back.
+      var lamp = smooth(.36, .48, p)*(1 - smooth(.94, .995, p));
+      cabinBody.setAttribute("fill", css(mix(bankC, c.hor, .1)));
+      cabinRoof.setAttribute("fill", css(mix(bankC, BLACK, .25)));
+      door.setAttribute("fill", css(mix(bankC, BLACK, .35)));
+      winOff.setAttribute("fill", css(mix(bankC, c.mid, .35)));
+      winOn.setAttribute("opacity", lamp.toFixed(3));
+      mullion.setAttribute("opacity", (.4 + .6*lamp).toFixed(3));
+      var smokeC = css(mix(mix(c.hor, WHITE, .35), c.shade, .35*night));
+      smoke.forEach(function(s){ s.setAttribute("fill", smokeC); });
+    },
+    tones:function(){ var c = cur || keyed(VALLEY_K, 0, ["top", "mid", "hor", "shade"]); return [c.top, c.mid, c.hor, mix(c.hor, c.shade, .64), mix(c.hor, c.shade, .95)]; }
+  };
+}
+
+/* ============================================================
+   Garden: a spring valley in the same layered style as Valley.
+   Morning mist lifts as you work, the river winds toward you,
+   and the big tree on the near bank grows until, at your goal,
+   it's in full bloom in golden light.
+   ============================================================ */
+// A round-crowned tree silhouette (trunk + crown) as path data.
+function roundTree(x, y, h, r){
+  var ty = y - h*.5;
+  return "M" + f1(x - r*.09) + " " + f1(y + 4) + "L" + f1(x - r*.06) + " " + f1(ty) + "L" + f1(x + r*.06) + " " + f1(ty) + "L" + f1(x + r*.09) + " " + f1(y + 4) + "Z" +
+    blob(x, ty - r*.55, [[0, 0, r, r*.82], [r*.55, r*.3, r*.68, r*.58], [-r*.58, r*.28, r*.66, r*.56], [r*.08, -r*.42, r*.62, r*.55]]);
+}
+// Round tree crowns along a ridge line (a woodland edge).
+function canopy(pts, o){
+  var r = rng(o.seed), d = "";
+  for(var x = (o.from == null ? -30 : o.from) + r()*o.gap[0]; x < (o.to == null ? W + 30 : o.to); x += o.gap[0] + r()*(o.gap[1] - o.gap[0])){
+    var rr = o.r[0] + r()*(o.r[1] - o.r[0]), y = at(pts, x) + rr*.45;
+    d += blob(x, y - rr*.6, [[0, 0, rr, rr*.9], [rr*.55, rr*.25, rr*.7, rr*.7], [-rr*.5, rr*.3, rr*.65, rr*.62]]);
+  }
+  return d;
+}
+// Scatter round trees on a ridge; some go to a second path (e.g. blossom).
+function grove(pts, o){
+  var r = rng(o.seed), d = ["", ""];
+  for(var x = (o.from || 0) + r()*o.gap[0]; x < (o.to == null ? W : o.to); x += o.gap[0] + r()*(o.gap[1] - o.gap[0])){
+    if(o.skip && x > o.skip[0] && x < o.skip[1]) continue;
+    var h = o.h[0] + r()*(o.h[1] - o.h[0]);
+    d[r() < (o.alt || 0) ? 1 : 0] += roundTree(x, at(pts, x) + (o.sink || 4), h, h*(.42 + r()*.12));
+  }
+  return d;
+}
+
+var GARDEN_K = [
+  {p:0,  top:"#9fb5c6", mid:"#d8d8cd", hor:"#f3e2c6", land:"#1f3d2a", sun:"#fff0d2", bloom:"#e6a1b4", mist:.95},
+  {p:.5, top:"#78acd8", mid:"#c3ddd6", hor:"#f0f0d8", land:"#21552c", sun:"#fffbe9", bloom:"#ee9db4", mist:.3},
+  {p:1,  top:"#6a9acd", mid:"#f0d2a8", hor:"#fbdca6", land:"#22512b", sun:"#ffe2a0", bloom:"#f39eae", mist:.1}
+];
+function buildGarden(ctx){
+  var svg = ctx.svg, R = rng(31);
+  var sky = ctx.grad("linearGradient", "sky", {x1:0, y1:0, x2:0, y2:1}, [{offset:0}, {offset:.6}, {offset:1}]);
+  var sunG = ctx.grad("radialGradient", "sunglow", null, [{offset:0, "stop-opacity":.9}, {offset:.3, "stop-opacity":.3}, {offset:1, "stop-opacity":0}]);
+  var mistG = ctx.grad("linearGradient", "mist", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-opacity":0}, {offset:.5, "stop-opacity":.85}, {offset:1, "stop-opacity":0}]);
+  var water = ctx.grad("linearGradient", "water", {x1:0, y1:0, x2:0, y2:1}, [{offset:0}, {offset:1}]);
+  var blur = el("filter", {id:ctx.id("blur"), x:"-30%", y:"-60%", width:"160%", height:"220%"}, ctx.defs);
+  el("feGaussianBlur", {stdDeviation:4}, blur);
+
+  el("rect", {width:W, height:H, fill:ctx.url("sky")}, svg);
+  var sunAt = el("g", null, svg);
+  el("circle", {r:360, fill:ctx.url("sunglow")}, sunAt);
+  var sun = el("circle", {r:40}, sunAt);
+  var cl = el("g", null, svg), clouds = [];
+  [[110, 220, 1.1], [190, 280, .8], [70, 250, .7]].forEach(function(c){
+    var g = el("g", {"class":"drift"}, cl);
+    g.style.animationDuration = c[1] + "s"; g.style.animationDelay = (-R()*c[1]).toFixed(1) + "s";
+    var inner = el("g", {transform:"translate(0 " + c[0] + ") scale(" + c[2] + ")"}, g);
+    clouds.push(el("path", {d:blob(0, 0, [[0, 0, 90, 24], [60, -18, 60, 30], [125, -4, 78, 24], [-60, 6, 60, 18], [30, 10, 120, 18]])}, inner));
+  });
+  var birdsAt = el("g", null, svg), birds = el("g", {"class":"birds"}, birdsAt);
+  [[0, 0], [24, -9], [38, 7], [58, -4]].forEach(function(b){
+    el("path", {d:"M" + b[0] + " " + (250 + b[1]) + "q6 -7 12 0q6 -7 12 0", fill:"none", "stroke-width":2, "stroke-linecap":"round", "class":"flap"}, birds);
+  });
+
+  var mists = [];
+  function mistBand(y, h, k){
+    var g = el("g", {"class":"sway"}, svg); g.style.animationDuration = (24 + k*7) + "s"; g.style.animationDelay = (-k*6) + "s";
+    mists.push({node:el("rect", {x:-250, y:y, width:2100, height:h, fill:ctx.url("mist")}, g), k:k});
+  }
+  // Layers far to near: each a gradient that fades into the haze at its foot.
+  var LAY = [];
+  function layer(depth, d, minY, footY){
+    var i = LAY.length;
+    var st = ctx.grad("linearGradient", "L" + i, {x1:0, y1:minY, x2:0, y2:footY, gradientUnits:"userSpaceOnUse"}, [{offset:0}, {offset:1}]);
+    LAY.push({depth:depth, stops:st, node:el("path", {d:d, fill:ctx.url("L" + i)}, svg)});
+    return LAY[i];
+  }
+  function minOf(pts){ return Math.min.apply(null, pts.map(function(p){ return p[1]; })); }
+
+  var far = ridge(61, {base:520, amp:120, scale:330, oct:3});
+  layer(.26, poly(far) + canopy(far, {seed:62, gap:[12, 26], r:[10, 18]}), minOf(far) - 20, 600);
+  mistBand(470, 110, 0);
+  var hill = ridge(63, {base:592, amp:90, scale:260, oct:3});
+  var hillTrees = grove(hill, {seed:64, gap:[26, 90], h:[30, 52], alt:.3});
+  var hillL = layer(.42, poly(hill) + hillTrees[0], minOf(hill) - 40, 660);
+  hillL.bloom = el("path", {d:hillTrees[1]}, svg);
+  // A little village on the right, behind the big tree.
+  var village = el("g", null, svg), walls = "", roofs = "", wins = "";
+  var vr = rng(77);
+  for(var k = 0; k < 9; k++){
+    var hx = 1060 + k*21 + vr()*8, hy = at(hill, hx) + 16 + (k % 3)*4, hs = .9 + vr()*.5;
+    walls += "M" + f1(hx - 7*hs) + " " + f1(hy) + "v" + f1(-8*hs) + "h" + f1(14*hs) + "v" + f1(8*hs) + "z";
+    roofs += "M" + f1(hx - 9*hs) + " " + f1(hy - 8*hs) + "l" + f1(9*hs) + " " + f1(-6*hs) + "l" + f1(9*hs) + " " + f1(6*hs) + "z";
+    wins += "M" + f1(hx - 3*hs) + " " + f1(hy - 5*hs) + "h" + f1(2.4*hs) + "v" + f1(2.4*hs) + "h" + f1(-2.4*hs) + "z";
+  }
+  var vWalls = el("path", {d:walls}, village), vRoofs = el("path", {d:roofs}, village), vWin = el("path", {d:wins}, village);
+  mistBand(545, 110, 1);
+  var meadow = ridge(65, {base:668, amp:26, scale:420, oct:2});
+  layer(.56, poly(meadow), minOf(meadow), 760);
+  // Small groves dotted over the meadow, kept clear of the river.
+  var mt = ["", ""], mr = rng(69);
+  for(var mk = 0; mk < 40; mk++){
+    var my = 684 + Math.pow(mr(), 1.4)*170, mx = mr()*W, mq = rv(my), mh = 16 + (my - 670)*.3;
+    if(Math.abs(mx - mq.x) < mq.w/2 + mh*.7 + 14) continue;
+    mt[mr() < .3 ? 1 : 0] += roundTree(mx, my, mh, mh*(.45 + mr()*.12));
+  }
+  var mg = layer(.66, mt[0], 600, 900); mg.bloom = el("path", {d:mt[1]}, svg);
+
+  // The river comes out from under the far hill and swings left and right toward you.
+  function rv(y){ var s = clamp((y - 650)/262); return {x:800 + (14 + 175*s)*Math.sin(s*Math.PI*4), w:3 + 210*Math.pow(s, 1.6), s:s}; }
+  var wl = [], wr = [];
+  for(var y = 650; y <= 914; y += 3){ var q = rv(y); wl.push([q.x - q.w/2, y]); wr.push([q.x + q.w/2, y]); }
+  var riverD = line(wl.concat(wr.slice().reverse())) + "Z";
+  var riverEdge = el("path", {d:riverD, fill:"none", "stroke-width":5, "stroke-linejoin":"round"}, svg);
+  el("path", {d:riverD, fill:ctx.url("water")}, svg);
+  var glints = el("g", null, svg);
+  for(var i = 0; i < 16; i++){
+    var gy = 672 + Math.pow(R(), .8)*230, gq = rv(gy), gw = 6 + gq.w*.22;
+    var gl = el("rect", {x:f1(gq.x - gw/2 + (R() - .5)*gq.w*.4), y:f1(gy), width:f1(gw), height:(1.2 + gq.s*2).toFixed(1), rx:1, fill:"#fff", filter:ctx.url("blur"), "class":"tw"}, glints);
+    gl.style.animationDuration = (2 + R()*2.5).toFixed(2) + "s"; gl.style.animationDelay = (-R()*3).toFixed(2) + "s";
+  }
+  mistBand(640, 100, 2);
+
+  // Near banks either side, wooded, framing the river.
+  var leftBank = []; for(var x = -20; x <= 640; x += 5) leftBank.push([x, lerp(650 + x*.08, 930, smooth(380, 620, x)) + Math.sin(x/33)*4]);
+  var lbTrees = grove(leftBank, {seed:66, from:-10, to:420, gap:[30, 70], h:[70, 120], alt:.35});
+  var lb = layer(.74, poly(leftBank) + lbTrees[0], 560, 900);
+  lb.bloom = el("path", {d:lbTrees[1]}, svg);
+  var rightBank = []; for(x = 860; x <= 1620; x += 5) rightBank.push([x, lerp(930, 690 - (x - 1060)*.07, smooth(880, 1070, x)) + Math.sin(x/29)*4]);
+  var rbTrees = grove(rightBank, {seed:67, from:1240, to:1620, gap:[34, 80], h:[70, 120], alt:.3});
+  var rb = layer(.74, poly(rightBank) + rbTrees[0], 560, 900);
+  rb.bloom = el("path", {d:rbTrees[1]}, svg);
+
+  // The big tree: its branches and crown grow with your goal.
+  var treeAt = el("g", null, svg);
+  var TR = rng(2024), branches = [];
+  var DUR = [.16, .11, .1, .09, .085];
+  function grow(x, y, ang, len, w, d, t0){
+    var t1 = t0 + DUR[d]*(.85 + TR()*.3);
+    var b = {x:x, y:y, x2:x + Math.cos(ang)*len, y2:y + Math.sin(ang)*len, w:w, t0:t0, t1:t1, d:d};
+    branches.push(b);
+    if(d >= 4){ b.leaf = true; return; }
+    var n = d === 0 ? 3 : 2 + (TR() < .4 ? 1 : 0);
+    for(var i = 0; i < n; i++){
+      var a = ang + (i - (n - 1)/2)*(d === 0 ? .55 : .6)*(.8 + TR()*.4) + (TR() - .5)*.3;
+      grow(b.x2, b.y2, a, len*(d === 0 ? .7 : .76 + TR()*.1), w*.6, d + 1, t1 - .01);
+    }
+    if(d >= 2) b.leaf = true;
+  }
+  grow(0, 0, -Math.PI/2, 150, 28, 0, .02);
+  var bark = el("g", {"stroke-linecap":"round", fill:"none"}, treeAt);
+  var crownBack = el("g", {"class":"leafsway"}, treeAt), crown = el("g", {"class":"leafsway"}, treeAt), rim = el("g", {"class":"leafsway"}, treeAt), bloom = el("g", null, treeAt);
+  rim.style.animationDelay = "-1.6s";
+  branches.forEach(function(b){
+    b.node = el("path", null, bark);
+    if(!b.leaf) return;
+    var r = 34 + (4 - b.d)*10 + TR()*14;
+    var sh = blob(0, 0, [[0, 0, r, r*.78], [r*.6, r*.25, r*.7, r*.55], [-r*.6, r*.22, r*.68, r*.52], [r*.1, -r*.4, r*.62, r*.5]]);
+    b.g = [el("g", null, crownBack), el("g", null, crown), el("g", null, rim)];
+    el("path", {d:sh, transform:"translate(6 10) scale(1.08)"}, b.g[0]);
+    el("path", {d:sh}, b.g[1]);
+    el("path", {d:blob(r*.2, -r*.28, [[0, 0, r*.5, r*.26]])}, b.g[2]);   // sunlit edge
+    b.leafT = b.t0 + (b.t1 - b.t0)*.4 + TR()*.03;
+    if(b.d >= 3){
+      b.flower = el("g", null, bloom);
+      var fl = "";
+      for(var j = 0; j < 7; j++) fl += blob((TR() - .5)*r*1.4, (TR() - .6)*r*.9, [[0, 0, 4.2, 3.4]]);
+      el("path", {d:fl}, b.flower);
+    }
+  });
+  var petals = el("g", null, treeAt);
+  for(i = 0; i < 18; i++){
+    var pe = el("ellipse", {cx:f1((R() - .3)*420), cy:f1(-420 + R()*220), rx:3.4, ry:2.1, "class":"petal"}, petals);
+    pe.style.animationDuration = (7 + R()*6).toFixed(2) + "s"; pe.style.animationDelay = (-R()*13).toFixed(2) + "s";
+  }
+
+  // Framing trees in the foreground, hugging whichever edges are on screen.
+  var front = el("path", null, svg), frontBloom = el("path", null, svg);
+  var ground = ridge(68, {base:915, amp:40, scale:160});
+
+  function layout(){
+    var v = ctx.view, k2 = v.k;
+    var tx = clamp(v.x1 - v.vw*.26, 1000, 1200);
+    treeAt.setAttribute("transform", "translate(" + f1(tx) + " " + f1(at(rightBank, tx) + 8) + ") scale(" + (clamp(v.vw/1300, .82, 1)*.95).toFixed(3) + ")");
+    var d = poly(ground), db = "";
+    d += roundTree(v.x0 - 10*k2, 930, 440*(.8 + .2*k2), 160*k2);
+
+    d += roundTree(v.x1 + 20*k2, 930, 400*(.8 + .2*k2), 150*k2);
+    front.setAttribute("d", d); frontBloom.setAttribute("d", db);
+  }
+  layout();
+
+  var cur = null;
+  return {
+    resize:layout,
+    update:function(p){
+      var c = keyed(GARDEN_K, p, ["top", "mid", "hor", "land", "sun", "bloom", "mist"]); cur = c;
+      set(sky[0], {"stop-color":css(c.top)}); set(sky[1], {"stop-color":css(c.mid)}); set(sky[2], {"stop-color":css(c.hor)});
+      // The sun climbs out of the morning haze, and is low and golden by your goal.
+      var sx = lerp(1180, 1240, p), sy = lerp(330, 220, smooth(0, .5, p)) + 90*smooth(.6, 1, p);
+      sunAt.setAttribute("transform", "translate(" + f1(sx) + " " + f1(sy) + ")");
+      sunG.forEach(function(s){ s.setAttribute("stop-color", css(c.sun)); });
+      sun.setAttribute("fill", css(mix(c.sun, WHITE, .3)));
+      sunAt.setAttribute("opacity", (.55 + .45*smooth(0, .4, p)).toFixed(3));
+      clouds.forEach(function(cp){ set(cp, {fill:css(mix(WHITE, c.hor, .35)), opacity:.8}); });
+      birds.setAttribute("stroke", css(mix(c.land, c.hor, .3)));
+      birdsAt.setAttribute("opacity", (smooth(.15, .3, p)*.8).toFixed(3));
+      LAY.forEach(function(l){
+        var col = mix(c.hor, c.land, l.depth);
+        l.stops[0].setAttribute("stop-color", css(col)); l.stops[1].setAttribute("stop-color", css(mix(col, c.hor, .28)));
+        if(l.bloom) l.bloom.setAttribute("fill", css(mix(c.hor, c.bloom, .25 + l.depth*.85)));
+      });
+      vWalls.setAttribute("fill", css(mix(c.hor, hex("#efe6d6"), .55)));
+      vRoofs.setAttribute("fill", css(mix(c.hor, hex("#9c4a36"), .55)));
+      vWin.setAttribute("fill", css(mix(c.hor, c.land, .55)));
+      mistG.forEach(function(s){ s.setAttribute("stop-color", css(mix(c.hor, WHITE, .55))); });
+      mists.forEach(function(m){ m.node.setAttribute("opacity", (c.mist*[.85, .9, .7][m.k]).toFixed(3)); });
+      water[0].setAttribute("stop-color", css(mix(c.hor, c.mid, .4))); water[1].setAttribute("stop-color", css(mix(c.mid, c.top, .6)));
+      riverEdge.setAttribute("stroke", css(mix(c.hor, c.land, .7)));
+      // The tree.
+      var nearC = mix(c.hor, c.land, .9);
+      bark.setAttribute("stroke", css(mix(nearC, BLACK, .25)));
+      crownBack.setAttribute("fill", css(mix(nearC, BLACK, .12)));
+      crown.setAttribute("fill", css(mix(c.hor, c.land, .78)));
+      rim.setAttribute("fill", css(mix(mix(c.hor, c.land, .6), c.sun, .3)));
+      bloom.setAttribute("fill", css(mix(c.bloom, WHITE, .25)));
+      petals.setAttribute("fill", css(mix(c.bloom, WHITE, .35)));
+      var thick = .3 + .7*smooth(0, .7, p);
+      branches.forEach(function(b){
+        var f = smooth(b.t0, b.t1, p);
+        if(f <= 0 || b.d >= 3) b.node.setAttribute("d", "");
+        else{
+          b.node.setAttribute("d", "M" + f1(b.x) + " " + f1(b.y) + "L" + f1(b.x + (b.x2 - b.x)*f) + " " + f1(b.y + (b.y2 - b.y)*f));
+          b.node.setAttribute("stroke-width", Math.max(2, b.w*thick).toFixed(1));
+        }
+        if(b.g){
+          var tf = "translate(" + f1(b.x2) + " " + f1(b.y2) + ") scale(" + smooth(b.leafT, b.leafT + .2, p).toFixed(3) + ")";
+          b.g.forEach(function(g){ g.setAttribute("transform", tf); });
+          if(b.flower) b.flower.setAttribute("transform", "translate(" + f1(b.x2) + " " + f1(b.y2) + ") scale(" + smooth(.9, 1, p).toFixed(3) + ")");
+        }
+      });
+      petals.setAttribute("opacity", smooth(.96, 1, p).toFixed(3));
+      front.setAttribute("fill", css(mix(c.hor, c.land, .96)));
+      frontBloom.setAttribute("fill", css(mix(mix(c.hor, c.land, .9), c.bloom, .55)));
+    },
+    tones:function(){ var c = cur || keyed(GARDEN_K, 0, ["top", "mid", "hor", "land"]); return [c.top, c.mid, c.hor, mix(c.hor, c.land, .56), mix(c.hor, c.land, .9)]; }
+  };
+}
+
+/* ============================================================
+   Rain: layered hills around a pond under a heavy sky. Light rain
+   to start, a downpour by mid-goal, then it eases off, mist rises,
+   the sun breaks through and a rainbow comes out at your goal.
+   ============================================================ */
+function buildRain(ctx){
+  var svg = ctx.svg, R = rng(404);
+  var sky = ctx.grad("linearGradient", "sky", {x1:0, y1:0, x2:0, y2:1}, [{offset:0}, {offset:.55}, {offset:1}]);
+  ctx.grad("radialGradient", "sunglow", null, [{offset:0, "stop-color":"#fffaf0", "stop-opacity":1}, {offset:.18, "stop-color":"#fff0c8", "stop-opacity":.7}, {offset:1, "stop-color":"#ffe2a0", "stop-opacity":0}]);
+  ctx.grad("linearGradient", "shaft", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-color":"#fff4d8", "stop-opacity":.5}, {offset:1, "stop-color":"#fff4d8", "stop-opacity":0}]);
+  var curtG = ctx.grad("linearGradient", "curtain", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-opacity":.7}, {offset:1, "stop-opacity":0}]);
+  var mistG = ctx.grad("linearGradient", "mist", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-opacity":0}, {offset:.5, "stop-opacity":.85}, {offset:1, "stop-opacity":0}]);
+  var water = ctx.grad("linearGradient", "water", {x1:0, y1:0, x2:0, y2:1}, [{offset:0}, {offset:1}]);
+  ctx.grad("linearGradient", "sunrefl", {x1:0, y1:0, x2:0, y2:1}, [{offset:0, "stop-color":"#fff0c8", "stop-opacity":.85}, {offset:1, "stop-color":"#fff0c8", "stop-opacity":0}]);
+  ctx.grad("radialGradient", "lamp", null, [{offset:0, "stop-color":"#ffd27f", "stop-opacity":.55}, {offset:1, "stop-color":"#ffb347", "stop-opacity":0}]);
+  var CLG = [0, 1, 2].map(function(i){ return ctx.grad("radialGradient", "cl" + i, null, [{offset:0, "stop-opacity":1}, {offset:.55, "stop-opacity":.92}, {offset:1, "stop-opacity":0}]); });
+  var soft = el("filter", {id:ctx.id("soft"), x:"-10%", y:"-10%", width:"120%", height:"120%"}, ctx.defs);
+  el("feGaussianBlur", {stdDeviation:2.5}, soft);
+  var blur = el("filter", {id:ctx.id("blur"), x:"-60%", y:"-10%", width:"220%", height:"120%"}, ctx.defs);
+  el("feGaussianBlur", {stdDeviation:5}, blur);
+  var glowF = el("filter", {id:ctx.id("glow"), x:"-50%", y:"-50%", width:"200%", height:"200%"}, ctx.defs);
+  el("feGaussianBlur", {stdDeviation:4}, glowF);
+
+  el("rect", {width:W, height:H, fill:ctx.url("sky")}, svg);
+  var SUN = [1030, 470];
+  var sunAt = el("g", {transform:"translate(" + SUN[0] + " " + SUN[1] + ")"}, svg);
+  el("ellipse", {rx:520, ry:280, fill:ctx.url("sunglow")}, sunAt);
+  var shafts = el("g", null, svg);
+  for(var i = 0; i < 7; i++){
+    var sx = SUN[0] - 280 + i*90 + R()*30, w0 = 8 + R()*14, spread = (sx - SUN[0])*.8;
+    el("polygon", {points:f1(sx - w0) + ",360 " + f1(sx + w0) + ",360 " + f1(sx + spread + 50 + R()*40) + ",680 " + f1(sx + spread - 30) + ",680", fill:ctx.url("shaft")}, shafts);
+  }
+  var bow = el("g", {opacity:0, filter:ctx.url("soft")}, svg);
+  ["#ff6a6a", "#ffa94d", "#ffe27a", "#74d67a", "#5ab0ff", "#7d86ff", "#b98cff"].forEach(function(c, i){
+    el("circle", {cx:760, cy:960, r:660 - i*8.5, fill:"none", stroke:c, "stroke-width":9, opacity:.9}, bow);
+  });
+
+  // Soft clouds in three layers, each a seamless strip drifting slowly.
+  function cloudLayer(seed, y0, y1, rx0, rx1, n, dur, gi){
+    var r = rng(seed), pan = el("g", {"class":"pan"}, svg);
+    pan.style.animationDuration = dur + "s"; pan.style.animationDelay = (-r()*dur).toFixed(0) + "s";
+    for(var k = 0; k < n; k++){
+      var x = k/n*1600 + r()*60, y = y0 + r()*(y1 - y0), rx = rx0 + r()*(rx1 - rx0), ry = rx*(.34 + r()*.16);
+      [-1600, 0, 1600].forEach(function(o){ el("ellipse", {cx:f1(x + o), cy:f1(y), rx:f1(rx), ry:f1(ry), fill:ctx.url("cl" + gi)}, pan); });
+    }
+    return pan;
+  }
+  var lowC = cloudLayer(11, 330, 430, 120, 220, 16, 420, 0);
+  var curtains = el("g", {"class":"sway"}, svg); curtains.style.animationDuration = "30s";
+  [[240, 80], [560, 120], [1260, 100], [1440, 70]].forEach(function(c){
+    el("polygon", {points:f1(c[0] - c[1]) + ",320 " + f1(c[0] + c[1]) + ",320 " + f1(c[0] + c[1]*.7 - 40) + ",620 " + f1(c[0] - c[1]*.8 - 40) + ",620", fill:ctx.url("curtain")}, curtains);
+  });
+  var midC = cloudLayer(12, 170, 320, 160, 300, 15, 320, 1);
+  var topC = cloudLayer(13, -40, 160, 220, 380, 14, 230, 2);
+
+  var mists = [];
+  function mistBand(y, h, k){
+    var g = el("g", {"class":"sway"}, svg); g.style.animationDuration = (24 + k*7) + "s"; g.style.animationDelay = (-k*6) + "s";
+    mists.push({node:el("rect", {x:-250, y:y, width:2100, height:h, fill:ctx.url("mist")}, g), k:k});
+  }
+  var LAY = [];
+  function layer(depth, d, minY, footY){
+    var i = LAY.length;
+    var st = ctx.grad("linearGradient", "L" + i, {x1:0, y1:minY, x2:0, y2:footY, gradientUnits:"userSpaceOnUse"}, [{offset:0}, {offset:1}]);
+    LAY.push({depth:depth, stops:st, node:el("path", {d:d, fill:ctx.url("L" + i)}, svg)});
+    return LAY[i];
+  }
+  function minOf(pts){ return Math.min.apply(null, pts.map(function(p){ return p[1]; })); }
+
+  var far = ridge(71, {base:540, amp:110, scale:320, oct:3});
+  layer(.3, poly(far) + canopy(far, {seed:72, gap:[12, 26], r:[9, 16]}), minOf(far) - 20, 620);
+  mistBand(500, 110, 0);
+  var hill = ridge(73, {base:610, amp:80, scale:260, oct:3});
+  var hillT = grove(hill, {seed:74, gap:[30, 100], h:[28, 48], skip:[380, 470]});
+  layer(.48, poly(hill) + hillT[0], minOf(hill) - 40, 680);
+  // A cottage on the hill, its window warm while the rain comes down.
+  var cx = 420, cy = at(hill, cx) + 10;
+  var cottage = el("path", {d:"M" + (cx - 22) + " " + cy + "v-18h44v18z M" + (cx - 27) + " " + (cy - 17) + "L" + cx + " " + (cy - 36) + "L" + (cx + 27) + " " + (cy - 17) + "Z M" + (cx + 10) + " " + (cy - 30) + "v-10h7v15z"}, svg);
+  var lampGlow = el("circle", {cx:cx - 8, cy:cy - 9, r:46, fill:ctx.url("lamp")}, svg);
+  var win = el("path", {d:"M" + (cx - 13) + " " + (cy - 13) + "h9v7h-9z M" + (cx + 4) + " " + (cy - 13) + "h9v7h-9z", fill:"#ffd27f"}, svg);
+  mistBand(580, 100, 1);
+  var meadow = ridge(75, {base:700, amp:22, scale:420, oct:2});
+  layer(.6, poly(meadow), minOf(meadow), 800);
+  // The pond mirrors the sky; rain rings it with ripples.
+  var PX = 790, PY = 748, PRX = 330, PRY = 34;
+  el("ellipse", {cx:PX, cy:PY, rx:PRX, ry:PRY, fill:ctx.url("water")}, svg);
+  var pondClip = el("clipPath", {id:ctx.id("pond")}, ctx.defs);
+  el("ellipse", {cx:PX, cy:PY, rx:PRX, ry:PRY}, pondClip);
+  var pondG = el("g", {"clip-path":ctx.url("pond")}, svg);
+  var sunRefl = el("path", {d:"M" + (SUN[0] - 40) + " " + (PY - PRY) + "h80l-20 " + (PRY*2) + "h-40z", fill:ctx.url("sunrefl"), filter:ctx.url("blur"), opacity:0}, pondG);
+  var ripples = el("g", null, pondG);
+  for(i = 0; i < 26; i++){
+    var a = R()*Math.PI*2, rr = Math.sqrt(R()), rx2 = PX + Math.cos(a)*rr*PRX*.92, ry2 = PY + Math.sin(a)*rr*PRY*.8, rs = 6 + (ry2 - PY + PRY)/PRY*5;
+    var rp = el("ellipse", {cx:f1(rx2), cy:f1(ry2), rx:f1(rs), ry:f1(rs*.28), fill:"none", stroke:"#e8eef4", "stroke-width":1.2, "class":"ripple"}, ripples);
+    rp.style.animationDuration = (1.1 + R()*.9).toFixed(2) + "s"; rp.style.animationDelay = (-R()*2).toFixed(2) + "s";
+  }
+  mistBand(680, 90, 2);
+
+  // Near banks either side, wooded, then grass tufts and a framing tree.
+  var leftBank = []; for(var x = -20; x <= 560; x += 5) leftBank.push([x, lerp(690 + x*.1, 930, smooth(330, 540, x)) + Math.sin(x/33)*4]);
+  var lbT = grove(leftBank, {seed:76, from:-10, to:360, gap:[34, 80], h:[60, 110]});
+  layer(.76, poly(leftBank) + lbT[0], 600, 900);
+  var rightBank = []; for(x = 1000; x <= 1620; x += 5) rightBank.push([x, lerp(930, 700 - (x - 1180)*.08, smooth(1020, 1200, x)) + Math.sin(x/29)*4]);
+  var rbT = grove(rightBank, {seed:77, from:1220, to:1620, gap:[34, 80], h:[60, 110]});
+  layer(.76, poly(rightBank) + rbT[0], 600, 900);
+  var front = el("path", null, svg), tufts = el("g", null, svg);
+  var ground = ridge(78, {base:918, amp:30, scale:160});
+  for(i = 0; i < 70; i++){
+    var gx = R()*W, gy = 912 - R()*24, gh = 28 + R()*46;
+    var t = el("path", {d:"M" + f1(gx - 4) + " " + f1(gy) + "Q" + f1(gx - 2) + " " + f1(gy - gh*.6) + " " + f1(gx + 6) + " " + f1(gy - gh) + "Q" + f1(gx + 2) + " " + f1(gy - gh*.5) + " " + f1(gx + 4) + " " + f1(gy) + "Z", "class":"grass"}, tufts);
+    t.style.animationDuration = (2.4 + R()*2).toFixed(2) + "s"; t.style.animationDelay = (-R()*3).toFixed(2) + "s";
+  }
+  function layout(){
+    var v = ctx.view, k = v.k;
+    front.setAttribute("d", poly(ground) + roundTree(v.x1 + 10*k, 930, 430*(.8 + .2*k), 160*k));
+  }
+  layout();
+
+  // Rain: a light sheet and a heavy sheet, each a seamless falling loop.
+  function sheet(seed, n, len, width, opacity, dur){
+    var at2 = el("g", {opacity:0}, svg), g = el("g", {"class":"rain"}, at2), d = "";
+    g.style.animationDuration = dur + "s";
+    for(var k = -1; k <= 3; k++){
+      var r = rng(seed);   // the same streaks in every band, so the loop is seamless
+      for(var j = 0; j < n; j++){
+        var dx = -200 + r()*2000 - 60*k, dy = r()*300 + 300*k - 300, ln = len*(.7 + r()*.6);
+        d += "M" + f1(dx) + " " + f1(dy) + "l" + f1(-ln*.2) + " " + f1(ln);
+      }
+    }
+    el("path", {d:d, stroke:"#d6dfe9", "stroke-width":width, "stroke-linecap":"round", opacity:opacity}, g);
+    return at2;
+  }
+  var lightRain = sheet(9, 45, 22, 1.1, .5, .55), heavyRain = sheet(19, 120, 36, 1.4, .65, .36);
+  var flash = el("rect", {width:W, height:H, fill:"#e6ecff", opacity:0}, svg);
+  var bolts = el("g", null, svg);
+
+  var I = .3, clear = 0, cur = null, R2 = rng(88);
+  function strike(){
+    var v = ctx.view, x = v.x0 + v.vw*(.1 + R2()*.8), y = 250, pts = [[x, y]];
+    while(y < 540){ y += 25 + R2()*35; x += (R2() - .5)*60; pts.push([x, y]); }
+    var g = el("g", null, bolts), d = line(pts);
+    el("path", {d:d, stroke:"#cdd9ff", "stroke-width":7, fill:"none", filter:ctx.url("glow"), opacity:.8}, g);
+    el("path", {d:d, stroke:"#fff", "stroke-width":2, fill:"none", "stroke-linejoin":"round"}, g);
+    if(g.animate){
+      g.animate([{opacity:0}, {opacity:1, offset:.08}, {opacity:.2, offset:.25}, {opacity:1, offset:.35}, {opacity:0}], {duration:650}).onfinish = function(){ g.remove(); };
+      flash.animate([{opacity:0}, {opacity:.22, offset:.08}, {opacity:0, offset:.25}, {opacity:.12, offset:.35}, {opacity:0}], {duration:650});
+    }else g.remove();
+  }
+  // Distant lightning only in the heaviest rain, at uneven intervals.
+  (function loop(){
+    ctx.later(function(){ if(ctx.lively() && I > .88) strike(); loop(); }, 20000 + R2()*50000);
+  })();
+
+  // Colours for light rain, heavy rain, and after it clears.
+  var C = {
+    top:  [hex("#55606e"), hex("#1d2229"), hex("#3d4b60")],
+    mid:  [hex("#8a95a1"), hex("#3a424d"), hex("#a9b3bc")],
+    hor:  [hex("#c3c8c9"), hex("#5c656e"), hex("#f4e4c4")],
+    land: [hex("#22392f"), hex("#141f1d"), hex("#1d5230")],
+    cl0:  [hex("#8a929d"), hex("#3e4550"), hex("#e7dac4")],
+    cl1:  [hex("#66707d"), hex("#2c323c"), hex("#8f939c")],
+    cl2:  [hex("#525a67"), hex("#1f242c"), hex("#505764")]
+  };
+  function col(k){ var c = C[k]; return mix(mix(c[0], c[1], I), c[2], clear); }
+  return {
+    resize:layout,
+    update:function(p){
+      // Light rain -> downpour at mid-goal -> eases off by ~90% -> clear, with a rainbow.
+      I = p < .5 ? lerp(.3, 1, smooth(0, .5, p)) : 1 - smooth(.5, .9, p);
+      clear = smooth(.78, 1, p);
+      var top = col("top"), mid = col("mid"), hor = col("hor"), land = col("land"); cur = {top:top, mid:mid, hor:hor, land:land};
+      set(sky[0], {"stop-color":css(top)}); set(sky[1], {"stop-color":css(mid)}); set(sky[2], {"stop-color":css(hor)});
+      ["cl0", "cl1", "cl2"].forEach(function(k, i){ var c = css(col(k)); CLG[i].forEach(function(s){ s.setAttribute("stop-color", c); }); });
+      lowC.setAttribute("opacity", (1 - clear*.4).toFixed(3));
+      midC.setAttribute("opacity", (1 - clear*.25).toFixed(3));
+      sunAt.setAttribute("opacity", (lerp(.35, .05, I) + clear*.75).toFixed(3));
+      shafts.setAttribute("opacity", Math.max(.2*(1 - I), clear*.6).toFixed(3));
+      curtG.forEach(function(s){ s.setAttribute("stop-color", css(mix(mid, hex("#2a313b"), .35))); });
+      curtains.setAttribute("opacity", (smooth(.25, 1, I)*.8).toFixed(3));
+      bow.setAttribute("opacity", (smooth(.92, 1, p)*.7).toFixed(3));
+      LAY.forEach(function(l){
+        var c = mix(hor, land, l.depth);
+        l.stops[0].setAttribute("stop-color", css(c)); l.stops[1].setAttribute("stop-color", css(mix(c, hor, .25)));
+      });
+      var hillC = mix(hor, land, .5);
+      cottage.setAttribute("fill", css(mix(hillC, BLACK, .2)));
+      var lamp = smooth(.25, .6, I)*(1 - clear);
+      win.setAttribute("opacity", (.15 + .85*lamp).toFixed(3)); lampGlow.setAttribute("opacity", lamp.toFixed(3));
+      water[0].setAttribute("stop-color", css(mix(hor, mid, .35))); water[1].setAttribute("stop-color", css(mix(mid, top, .5)));
+      sunRefl.setAttribute("opacity", (clear*.8).toFixed(3));
+      ripples.setAttribute("opacity", smooth(.1, .7, I).toFixed(3));
+      mistG.forEach(function(s){ s.setAttribute("stop-color", css(mix(hor, WHITE, .5))); });
+      var mistAmt = .25 + .75*smooth(.72, .86, p)*(1 - .5*smooth(.96, 1, p));
+      mists.forEach(function(m){ m.node.setAttribute("opacity", (mistAmt*[.8, .75, .6][m.k]).toFixed(3)); });
+      var frontC = css(mix(hor, land, .95));
+      front.setAttribute("fill", frontC); tufts.setAttribute("fill", frontC);
+      lightRain.setAttribute("opacity", smooth(.05, .3, I).toFixed(3));
+      heavyRain.setAttribute("opacity", smooth(.45, 1, I).toFixed(3));
+    },
+    tones:function(){ var c = cur || {top:C.top[0], mid:C.mid[0], hor:C.hor[0], land:C.land[0]}; return [c.top, c.mid, c.hor, mix(c.hor, c.land, .6)]; }
+  };
+}
+
+var DEFS = {
+  valley:{name:"Valley", blurb:"The sun sets as you work, night falls, and it rises when you hit your goal.", time:true, sample:.44, build:buildValley},
+  garden:{name:"Garden", blurb:"Morning mist lifts off the tea hills as you work, and the big tree grows in full by your goal.", sample:.7, build:buildGarden},
+  rain:{name:"Rain", blurb:"Light rain to start, a downpour by mid-goal, then it clears to a rainbow when you hit your goal.", sample:.95, build:buildRain}
+};
+
+// Valley by the clock instead of the goal: afternoon at 2pm, sunset ~7:30pm,
+// night from 9pm, first light ~5am, sunrise ~6:30am; mornings look like afternoon.
+function timeOfDay(d){
+  var h = d.getHours() + d.getMinutes()/60;
+  var K = [[0, .7], [5, .86], [6, .95], [6.5, 1], [6.51, 0], [14, 0], [17.5, .3], [19.5, .44], [20.5, .52], [21.5, .6], [24, .7]];
+  for(var i = 1; i < K.length; i++) if(h <= K[i][0]){ var a = K[i-1], b = K[i]; return lerp(a[1], b[1], (h - a[0])/((b[0] - a[0]) || 1)); }
+  return .7;
+}
+
+window.Scenes = {
+  list:Object.keys(DEFS).map(function(k){ return {id:k, name:DEFS[k].name, blurb:DEFS[k].blurb, time:!!DEFS[k].time, sample:DEFS[k].sample}; }),
+  has:function(id){ return !!DEFS[id]; },
+  supportsTime:function(id){ return !!(DEFS[id] && DEFS[id].time); },
+  mount:mount,
+  timeOfDay:timeOfDay
+};
+})();
+</script>
+<!-- @scenes-end -->
 <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore-compat.js"></script>
@@ -1119,7 +2084,8 @@ var state = {
             style:"digital", theme:"auto",
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
-            showGoal:true, showCycle:true, countdownDate:"", calColor:""},
+            showGoal:true, showCycle:true, countdownDate:"", calColor:"",
+            scene:"none", sceneDrive:"goal", sceneMotion:true},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
   // Logged time lives in `log` (see the ledger section): per day, one record
@@ -2287,12 +3253,155 @@ function applyTheme(){
   // Optional clock-face elements.
   document.body.classList.toggle("no-goal", s.showGoal === false);
   document.body.classList.toggle("no-cycle", s.showCycle === false);
+
+  syncScene();   // after the colours above: the glass is worked out from them
 }
 function cycleTheme(){
   var order = ["auto","light","dark"];
   var i = order.indexOf(state.settings.theme);
   state.settings.theme = order[(i+1) % order.length];
   save(true); applyTheme(); renderCalendar();
+}
+
+/* ---------- scenes ----------
+   The scene engine (Scenes, in its own script above) draws the backdrop; this
+   part decides what it shows. A scene moves with today's share of the daily
+   goal (capped at 100%, so going past it just stays at the finished look), or
+   for Valley optionally with the time of day. Forward progress eases in over a
+   few seconds; when progress drops back (a new day, a reset, an edit) the scene
+   winds back gradually over three minutes instead of snapping. */
+var sceneInst = null, sceneId = "none";
+var sceneShown = null,     // the progress the scene is showing now
+    sceneDrop = null,      // {from, to} while winding back
+    scenePreview = null,   // the Settings preview slider overrides while dragged
+    sceneTimer = 0, sceneLast = 0, glassKey = "";
+var SCENE_BACK_MS = 3*60*1000;
+var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+function scenesReady(){ return !!(window.Scenes && Scenes.mount); }
+function sceneTimeMode(){ return state.settings.sceneDrive === "time" && scenesReady() && Scenes.supportsTime(sceneId); }
+function sceneTarget(){
+  if(sceneTimeMode()) return Scenes.timeOfDay(new Date());
+  var rec = state.days[key(new Date())] || {}, total = 0;
+  for(var c in rec) total += rec[c];
+  return Math.max(0, Math.min(1, total / Math.max(1, state.settings.goal*3600)));
+}
+// Mount, swap or remove the scene to match the setting.
+function syncScene(){
+  var want = state.settings.scene || "none";
+  if(!scenesReady() || !Scenes.has(want)) want = "none";
+  if(want !== sceneId){
+    if(sceneInst){ sceneInst.destroy(); sceneInst = null; }
+    sceneId = want; sceneShown = null; sceneDrop = null; glassKey = "";
+    // The class goes on first: the backdrop has to be visible (sized) when the scene measures it.
+    document.body.classList.toggle("scene", want !== "none");
+    if(want !== "none") sceneInst = Scenes.mount(document.getElementById("scenebg"), want);
+    if(!sceneInst){
+      document.body.classList.remove("scene");
+      clearTimeout(sceneTimer);
+      if(want !== "none"){ sceneId = "none"; }
+      return;
+    }
+  }
+  if(sceneInst){ glassKey = ""; stepScene(); }
+}
+function stepScene(){
+  clearTimeout(sceneTimer);
+  if(!sceneInst) return;
+  var now = Date.now(), dt = sceneLast ? Math.min(5000, now - sceneLast) : 0, t = sceneTarget();
+  sceneLast = now;
+  if(sceneShown === null || sceneTimeMode()){ sceneShown = t; sceneDrop = null; }
+  else if(t < sceneShown - 0.002){
+    if(!sceneDrop || Math.abs(sceneDrop.to - t) > 0.001) sceneDrop = {from:sceneShown, to:t};
+    sceneShown = Math.max(t, sceneShown - (sceneDrop.from - t)*dt/SCENE_BACK_MS);
+  }else{
+    sceneDrop = null;
+    var d = t - sceneShown;
+    sceneShown = d > 0.002 ? sceneShown + d*(1 - Math.exp(-dt/4000)) : t;
+  }
+  var moving = sceneDrop || Math.abs(t - sceneShown) > 0.002;
+  sceneInst.update({
+    p: scenePreview !== null ? scenePreview : sceneShown,
+    mode: mode === "focus" ? "focus" : "break",
+    running: running,
+    motion: state.settings.sceneMotion !== false && !reduceMotion
+  });
+  updateGlass();
+  sceneTimer = setTimeout(stepScene, moving ? 250 : 1000);
+}
+// Frosted glass: the clearest tint of the card colour over which the text,
+// muted text and accent text all stay readable against every colour the scene
+// shows behind the cards right now.
+function updateGlass(){
+  if(!sceneInst) return;
+  var tones = sceneInst.tones().map(function(c){ return c.map(Math.round); });
+  var key2 = tones.join("|") + "|" + (document.documentElement.getAttribute("data-theme") || "auto");
+  if(key2 === glassKey) return;
+  glassKey = key2;
+  var root = document.documentElement, cs = getComputedStyle(root);
+  var surf = parseColor(cs.getPropertyValue("--surface")), ink = parseColor(cs.getPropertyValue("--ink")),
+      muted = parseColor(cs.getPropertyValue("--muted"));
+  if(!surf || !ink || !muted) return;
+  var a = 0.55, bgs;
+  for(; a < 0.96; a += 0.02){
+    bgs = tones.map(function(t){ return mixRgb(t, surf, a); });
+    if(bgs.every(function(bg){ return contrastRatio(ink, bg) >= 7 && contrastRatio(muted, bg) >= 4.5; })) break;
+  }
+  a = Math.min(0.96, a);
+  bgs = tones.map(function(t){ return mixRgb(t, surf, a); });
+  root.style.setProperty("--glass", "rgba(" + surf.join(",") + "," + a.toFixed(2) + ")");
+  root.style.setProperty("--glass-line", "rgba(" + ink.join(",") + ",.14)");
+  // Coloured text: readable on the glass too, not just on a solid card.
+  [["--focus-text", "--focus"], ["--rest-text", "--rest"], ["--warn-text", "--warn"]].forEach(function(p){
+    var c = parseColor(cs.getPropertyValue(p[1]));
+    if(c) root.style.setProperty(p[0], rgbStr(readableText(c, bgs.concat([surf]), ink, 4.5)));
+  });
+  // The page title sits straight on the scene: white or dark, whichever reads better on the sky.
+  var sky = tones[0], white = [255,255,255], dark = [22,33,31];
+  var useWhite = contrastRatio(white, sky) >= contrastRatio(dark, sky);
+  root.style.setProperty("--scene-ink", useWhite ? "#fff" : "#16211F");
+  root.style.setProperty("--scene-shadow", useWhite ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.55)");
+}
+window.addEventListener("resize", function(){ if(sceneInst){ sceneInst.resize(); } });
+document.addEventListener("visibilitychange", function(){ if(!document.hidden && sceneInst){ sceneLast = Date.now(); stepScene(); } });
+
+// Settings > Scenes: a live thumbnail of each, plus the options.
+var sceneThumbs = [];
+function renderSceneGallery(){
+  var grid = document.getElementById("scenegrid");
+  if(!grid.childNodes.length){
+    var items = [{id:"none", name:"None", blurb:"The plain app, no scene."}].concat(scenesReady() ? Scenes.list : []);
+    items.forEach(function(it){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "scenecard"; b.setAttribute("data-scene", it.id);
+      var th = document.createElement("span"); th.className = "scthumb" + (it.id === "none" ? " plain" : "");
+      var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = it.name;
+      b.appendChild(th); b.appendChild(nm); grid.appendChild(b);
+      b._blurb = it.blurb;
+      b.addEventListener("click", function(){
+        state.settings.scene = it.id;
+        save(true); applyTheme(); renderSceneGallery();
+      });
+      if(it.id !== "none"){
+        var inst = Scenes.mount(th, it.id, {thumb:true});
+        if(inst){ inst.update({p:it.sample, motion:false}); sceneThumbs.push(inst); }
+      }
+    });
+  }
+  var cur = state.settings.scene || "none", blurb = "";
+  Array.prototype.forEach.call(grid.querySelectorAll(".scenecard"), function(b){
+    var on = b.getAttribute("data-scene") === cur;
+    b.setAttribute("aria-pressed", on);
+    if(on) blurb = b._blurb;
+  });
+  document.getElementById("scene-blurb").textContent = blurb;
+  var has = cur !== "none";
+  document.getElementById("f-scene-drive").hidden = !(has && scenesReady() && Scenes.supportsTime(cur));
+  document.getElementById("f-scene-preview").hidden = !has;
+  document.getElementById("in-scene-drive").value = state.settings.sceneDrive || "goal";
+  document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
+  var pv = document.getElementById("in-scene-preview");
+  if(scenePreview === null) pv.value = Math.round((sceneShown || 0)*1000);
+  document.getElementById("scene-preview-val").textContent = Math.round(pv.value/10) + "%";
 }
 
 /* ---------- clock rendering ---------- */
@@ -3182,6 +4291,9 @@ document.getElementById("open-settings").addEventListener("click", function(){
   fillSettingsInputs();
   renderSyncUI();
   dlgSettings.showModal();
+  // Reopens on whichever tab was last used.
+  var last = document.querySelector(".dtabs button[aria-selected='true']");
+  showSettingsPane(last ? last.getAttribute("data-pane") : "gen");
 });
 
 // Appearance takes effect as you pick it, so you can watch it change behind the dialog.
@@ -3198,10 +4310,42 @@ Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), functio
     Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), function(x){
       x.setAttribute("aria-selected", x.getAttribute("data-pane") === want);
     });
-    document.getElementById("pane-gen").classList.toggle("on", want === "gen");
-    document.getElementById("pane-app").classList.toggle("on", want === "app");
-    document.getElementById("pane-sync").classList.toggle("on", want === "sync");
+    showSettingsPane(want);
   });
+});
+function showSettingsPane(want){
+  Array.prototype.forEach.call(document.querySelectorAll(".dtabs button"), function(x){
+    x.setAttribute("aria-selected", x.getAttribute("data-pane") === want);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#dlg-settings .dpane"), function(p){
+    p.classList.toggle("on", p.id === "pane-" + want);
+  });
+  dlgSettings.classList.toggle("scenes-open", want === "scene");
+  if(want === "scene") renderSceneGallery();
+}
+document.getElementById("scenebtn").addEventListener("click", function(){
+  fillSettingsInputs();
+  renderSyncUI();
+  dlgSettings.showModal();
+  showSettingsPane("scene");
+});
+document.getElementById("in-scene-drive").addEventListener("change", function(){
+  state.settings.sceneDrive = document.getElementById("in-scene-drive").value;
+  save(true); sceneShown = null; stepScene(); renderSceneGallery();
+});
+document.getElementById("in-scene-motion").addEventListener("change", function(){
+  state.settings.sceneMotion = document.getElementById("in-scene-motion").checked;
+  save(true); stepScene();
+});
+document.getElementById("in-scene-preview").addEventListener("input", function(){
+  scenePreview = document.getElementById("in-scene-preview").value/1000;
+  document.getElementById("scene-preview-val").textContent = Math.round(scenePreview*100) + "%";
+  stepScene();
+});
+// Previewing is only while the dialog is open: closing it goes back to the real progress.
+dlgSettings.addEventListener("close", function(){
+  dlgSettings.classList.remove("scenes-open");
+  if(scenePreview !== null){ scenePreview = null; stepScene(); }
 });
 
 document.getElementById("in-tod").addEventListener("change", function(){
