@@ -143,7 +143,8 @@
 
   /* min(250px, 62vw): full size on anything roomy, but shrinks with the
      viewport on a narrow phone instead of crowding the card edges. */
-  .face{position:relative;width:min(250px,62vw);height:min(250px,62vw);margin:0 auto}
+  /* ...and on a short phone, also by the screen height, so Start stays on screen. */
+  .face{position:relative;width:min(250px,62vw,calc(100dvh - 380px));height:min(250px,62vw,calc(100dvh - 380px));margin:0 auto;container-type:inline-size}
   .face svg{display:block;width:100%;height:100%}
   .ring-track{fill:none;stroke:var(--line);stroke-width:6}
   /* Matches the 250ms tick interval exactly. A longer transition here
@@ -162,7 +163,7 @@
   /* Digital style centers the countdown inside the ring; analog keeps it as
      a caption below the clock (see buildFace(), which moves this same
      element between the two spots rather than duplicating it). */
-  .digits.inset{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0}
+  .digits.inset{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;font-size:20cqi;margin:0}   /* a fixed share of the face: scales with it */
   /* The analog caption doesn't need to compete with the clock face for
      attention, so it's a plain small label rather than the same bold
      display-sized number the ring uses. No margin-top of its own -- the
@@ -225,7 +226,7 @@
      otherwise outrank these plain two-class selectors. */
   body.fs .face{width:min(84vw,66vh)!important;height:min(84vw,66vh)!important;margin:0}
   /* Digits scale off both axes too, for the same reason. */
-  body.fs .digits.inset{font-size:min(11vw,8vh)!important}
+  /* full screen: the face is bigger, so the inset digits (20cqi) already are. */
   body.fs .digits:not(.inset){font-size:min(4.6vw,3.4vh)!important}
   /* Reserve the analog caption's height whether or not it's showing: in
      digital the caption moves inside the face and this slot is empty, so if
@@ -497,10 +498,22 @@
   .footer{margin-top:22px;display:flex;gap:14px;row-gap:9px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
   .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:0}
   .footer button:hover{color:var(--ink)}
-  .clockextras{display:flex;gap:9px;justify-content:center;margin-top:16px;flex-wrap:wrap}
-  /* Fixed width so the label swap "Analog" <-> "Digital" doesn't change the
-     button's size and shove the centred Full screen button sideways. */
-  #stylebtn{min-width:96px}
+  /* Full screen + analog/digital: small icon buttons in the clock card's
+     top-right corner (every layout). The card is the size container "clock". */
+  #page-clock > .card{position:relative;container:clock / inline-size}
+  .clockextras{position:absolute;top:12px;right:12px;display:flex;gap:6px;margin:0;z-index:2}
+  .cicon{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);cursor:pointer}
+  .cicon:hover{color:var(--ink);border-color:var(--muted)}
+  .cicon svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  /* A narrow card has no room beside the mode tabs: give the icons a slim row. */
+  @container clock (max-width:439px){ .clockwrap{padding-top:34px} }
+  /* Very narrow (small phones): keep the three mode tabs on one line -- wrapped
+     onto two they pushed Start below the fold. */
+  @container clock (max-width:300px){
+    .mode-row{flex-wrap:nowrap;gap:4px}
+    .mode-row button{padding:6px 9px;font-size:12px}
+  }
 
   @media (max-width:560px){
     /* Keep the safe-area insets the base rule carries -- an earlier version
@@ -559,7 +572,7 @@
     #page-overview.on,#page-clock.on{flex:1;min-height:0;min-width:0}
 
     /* Shared clock internals, both orientations. */
-    #page-clock.on > .card{min-height:0;overflow-y:auto;margin-top:0}
+    #page-clock.on > .card{min-height:0;overflow-y:auto;margin-top:0;container-type:size}
     .sidebar{min-width:0}
     /* min-width:0 down the flex chain: a flex item defaults to min-width:auto
        (its content's min width), so without this the To-do card refused to
@@ -569,7 +582,7 @@
     #taskslot .tasklist{flex:1;overflow-y:auto;min-height:0}
     #tabs [data-page="tasks"]{display:none}
 
-    #page-clock.on .digits.inset{font-size:clamp(32px,3.4vw,58px)}
+    /* .digits.inset scales with the face (20cqi) -- no viewport clamp here. */
     #page-clock.on .digits:not(.inset){font-size:clamp(18px,1.6vw,26px)}
     /* Reserve a hair more than the analog caption ever renders (its box was
        ~2px taller than this slot's old min-height), so the slot is the exact
@@ -598,7 +611,7 @@
        guessing. clockdisplay takes the leftover height; the face fills it as a
        square capped by the available width. */
     #page-clock.on .clockdisplay{flex:1 1 0;min-height:0;align-self:stretch;
-      display:grid;grid-template-rows:1fr auto auto;place-items:center;gap:4px}
+      display:grid;grid-template-rows:1fr auto auto;grid-template-columns:minmax(0,1fr);place-items:center;gap:4px}
     #page-clock.on .face{height:100%;width:auto;aspect-ratio:1/1;max-width:100%;min-height:0;margin:0}
 
     #page-overview.on .stat{display:flex;flex-direction:column;justify-content:center;padding:14px 18px;overflow:hidden}
@@ -607,7 +620,7 @@
   }
 
   /* ---- landscape tablet / desktop: clock beside its sidebar ---- */
-  @media (min-width:600px) and (min-height:600px) and (orientation:landscape){
+  @media (min-width:760px) and (min-height:600px) and (min-aspect-ratio:801/1000){
     #page-clock.on{display:grid;grid-template-columns:7fr minmax(260px,3fr);gap:24px}
     #page-clock.on > .sidebar{margin-top:0}
     .sidebar{display:flex;flex-direction:column;min-height:0}
@@ -644,28 +657,23 @@
      fills the top and Categories + To-do sit as a row beneath it; on Overview
      the stats run across the top, the calendar fills the middle with room for
      real square-ish cells, and the breakdown sits below. */
-  @media (min-width:600px) and (min-height:600px) and (orientation:portrait){
+  @media (min-width:600px) and (min-height:600px) and (max-aspect-ratio:4/5), (min-width:600px) and (max-width:759px) and (min-height:600px){
     #page-clock.on{display:flex;flex-direction:column;gap:16px}
-    #page-clock.on > .card{flex:1;min-height:0}
-    /* Categories then To-do as full-width bars stacked under the clock:
-       categories need little height (just a row of chips), so it's a slim
-       bar; the to-do gets the full width and shows a few rows then scrolls. */
+    #page-clock.on > .card{flex:1;min-height:0;position:relative}
+    /* Categories and To-do SIDE BY SIDE under the clock. Stacked, the two cards
+       took ~444px of a 1024px tablet and left the clock face ~55px. */
     #page-clock.on > .sidebar{
-      flex:none;display:flex;flex-direction:column;gap:14px;min-height:0;
+      flex:none;display:grid;grid-template-columns:minmax(170px,1fr) 2.2fr;gap:14px;min-height:0;
     }
     #page-clock.on .sidebar > *{margin:0;min-width:0}
-    /* Fixed to exactly 3 task rows (plus the small column header), then it
-       scrolls -- so the to-do bar never grows past this and never shrinks the
-       clock above it. ~3*44px rows + ~24px header. */
-    #page-clock.on .sidebar .tasklist{flex:none;height:156px;overflow-y:auto}
-    /* Face sizing is the shared flex-fill -- it shrinks to fit whatever the
-       stacked layout leaves, so the clock panel never needs to scroll. */
-    /* The to-do bar is full width here, so split it into Today | Carried
-       over columns (JS only fills the second when something carried over;
-       .tasklist gets .split when both are shown -- see renderTasks). */
-    #page-clock.on #taskcard .tasklist.split{
-      display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;align-items:start;
-    }
+    #page-clock.on #chipcard{overflow-y:auto}
+    /* ~3 task rows, then it scrolls -- the to-do never grows past this and never
+       shrinks the clock above it. */
+    /* Scales with the screen height: ~3 rows on a tall tablet, fewer on a short
+       window, so the clock above keeps most of the height. */
+    #page-clock.on .sidebar .tasklist{flex:none;height:clamp(58px, calc(22dvh - 80px), 146px);overflow-y:auto}
+    /* Narrower now, so Today / Carried over stack rather than split in two. */
+    #page-clock.on #taskcard .tasklist.split{display:flex;flex-direction:column}
 
     #page-overview.on{display:flex;flex-direction:column;gap:16px}
     #page-overview.on #ov-header{margin:0}
@@ -676,6 +684,111 @@
     #calcard .grid{grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;flex:1;min-height:0}
     #calcard .day{aspect-ratio:auto}
     #calcard .breakdown{margin-top:14px;flex:none}
+  }
+
+  /* ---- clock card that's wide and short: face on the left, controls right ----
+     Decided by the CARD's own shape (container query), not the device: stacked
+     controls under the face left it tiny (or zero) on short screens -- a
+     landscape phone, a 960x600 tablet, a small laptop window. Applies wherever
+     the card has a definite size (the no-scroll layouts). */
+  @container clock (min-aspect-ratio:6/5) and (max-height:640px){
+    .clockwrap{display:grid !important;height:100%;
+      grid-template-columns:auto minmax(0,1fr);
+      grid-template-rows:1fr auto auto auto auto auto 1fr;
+      grid-template-areas:"disp ." "disp mode" "disp mirror" "disp ctrl" "disp goal" "disp extra" "disp .";
+      column-gap:clamp(14px,4cqw,56px);row-gap:clamp(6px,2.5cqh,12px);justify-items:center;align-items:center;
+      padding-top:0 !important}
+    /* The corner icons join the right-hand column (a corner would collide with
+       the mode tabs here). */
+    .clockextras{position:static;grid-area:extra;margin:0}
+    .clockdisplay{grid-area:disp;align-self:stretch;height:100%;width:min(calc(100cqh - 64px), calc(100cqw - 300px), 54cqw);
+      display:grid;grid-template-rows:1fr auto auto;grid-template-columns:minmax(0,1fr);place-items:center;gap:2px;margin:0}
+    /* Sized from the column WIDTH (the column is already capped by the card height
+       minus the caption rows), and stronger than the stacked layout's height-based
+       rule -- otherwise the face spilled past its column into the controls. */
+    #page-clock .clockdisplay .face{width:100% !important;height:auto !important;aspect-ratio:1/1;max-width:100%;max-height:100%;min-height:0;margin:0}
+    .mode-row{grid-area:mode;margin:0;flex-wrap:nowrap} .mirrornote{grid-area:mirror;margin:0}
+    .controls{grid-area:ctrl;margin:0;flex-wrap:nowrap} .goalwrap{grid-area:goal;width:100%;max-width:420px;margin:0}
+    .mode-row button,.controls button{white-space:nowrap}
+    .mode-row button{padding:6px 12px}
+  }
+
+  /* ...and when that card is really short (small landscape phones), tighter
+     controls so the right-hand column still fits. */
+  @container clock (min-aspect-ratio:6/5) and (max-height:300px){
+    .mode-row button{padding:4px 10px;font-size:12px}
+    .controls button{padding:7px 14px;font-size:13.5px}
+    .goalmeta{font-size:11px;margin-top:3px}
+    .cicon{width:28px;height:28px}
+    .tod{font-size:12px;margin-top:2px}
+    /* Compact controls need less width, and the captions under the face less
+       height -- give both back to the face. */
+    .clockdisplay{width:min(calc(100cqh - 40px), calc(100cqw - 250px), 56cqw)}
+  }
+
+  /* ---- portrait phone: a full-height clock, categories as a slim strip ----
+     The clock screen used to be a scrolling page (a face capped at 250px, the
+     controls, then a whole Categories card), which looked compressed. Now the
+     categories are one sideways-scrolling line at the top and the clock card
+     fills the rest, its face taking whatever height is left. To-do stays on the
+     Tasks tab. */
+  @media (max-width:599px) and (max-aspect-ratio:1/1){
+    .shell{height:100%;display:flex;flex-direction:column}
+    header.top{flex:none;margin-bottom:12px}
+    #page-clock.on{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+    #page-clock.on > .sidebar{order:-1;flex:none;margin:0}
+    #page-clock.on #chipcard{display:flex;align-items:center;gap:8px;padding:8px 10px;margin:0}
+    #page-clock.on #chipcard .card-head{order:2;margin:0;flex:none}
+    #page-clock.on #chipcard .card-head h2{display:none}
+    #page-clock.on #chips{flex:1;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+    #page-clock.on #chips::-webkit-scrollbar{display:none}
+    #page-clock.on #chips > *{flex:none}
+    #page-clock.on > .card{flex:1;min-height:0;margin:0;container-type:size;overflow:hidden}
+    #page-clock.on .clockwrap{height:100%;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:clamp(6px,1.6dvh,16px)}
+    #page-clock.on .mode-row,#page-clock.on .controls,#page-clock.on .goalwrap,#page-clock.on .mirrornote{margin:0;flex:none}
+    #page-clock.on .goalwrap{width:100%}
+    #page-clock.on .clockdisplay{flex:1 1 0;min-height:0;align-self:stretch;
+      display:grid;grid-template-rows:1fr auto auto;grid-template-columns:minmax(0,1fr);place-items:center;gap:4px}
+    #page-clock.on .face{height:100%;width:auto;aspect-ratio:1/1;max-width:100%;min-height:0;margin:0}
+  }
+  /* Narrow cards: mode tabs compact and on one line (wrapped onto two they ate
+     the clock's height). */
+  @container clock (max-width:439px){
+    .mode-row{flex-wrap:nowrap}
+    .mode-row button{padding:6px 11px;font-size:12.5px}
+  }
+  /* ...and when that leaves room for the corner icons on the same line, put
+     them side by side instead of giving the icons their own row. */
+  @container clock (min-width:330px) and (max-width:439px){
+    .clockwrap{padding-top:0}
+    .mode-row{align-self:flex-start}
+  }
+  /* A short stacked card (small phones): tighter controls, so the face keeps
+     the height. */
+  @container clock (max-height:500px) and (max-aspect-ratio:6/5){
+    .controls button{padding:7px 14px;font-size:13.5px}
+    .goalmeta{font-size:11px;margin-top:3px}
+    .clockwrap{gap:6px !important}
+    .tod{font-size:12px;margin-top:0}
+  }
+  /* Floor for very short phones: keep a usable clock and let the page scroll a
+     little, rather than shrink the face to nothing. */
+  @media (max-width:599px) and (max-aspect-ratio:1/1){
+    #page-clock.on > .card{min-height:400px}
+  }
+
+  /* ---- landscape phone: the clock screen fits without scrolling ----
+     Clock card beside a narrow Categories column; tasks stay on the Tasks tab
+     as on a portrait phone. Other pages scroll normally. */
+  @media (max-height:599px) and (min-aspect-ratio:5/4) and (min-width:480px){
+    .shell{height:100%;display:flex;flex-direction:column;padding-top:calc(10px + env(safe-area-inset-top));
+      padding-left:calc(10px + env(safe-area-inset-left));padding-right:calc(10px + env(safe-area-inset-right))}
+    header.top{flex:none;margin-bottom:10px}
+    #page-clock.on{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(124px,24%);gap:10px}
+    #page-clock.on > .card{min-height:0;margin:0;padding:14px;container-type:size;overflow:hidden}
+    #page-clock.on > .sidebar{min-height:0;overflow-y:auto}
+    #page-clock.on .sidebar > *{margin:0}
   }
 
   /* ---------- another device is running the timer ---------- */
@@ -794,9 +907,11 @@
           <div class="goalmeta"><span id="goalnow">0h 00m</span><span class="cyclenote" id="cyclenote">Session 1 of 4</span><span id="goalof">of 4h</span></div>
         </div>
 
+        <!-- Small corner icons: full screen, and analog/digital (shows the style
+             it switches to; filled in by buildFace). -->
         <div class="clockextras">
-          <button class="ghost" id="fsbtn">Full screen</button>
-          <button class="ghost" id="stylebtn">Analog</button>
+          <button type="button" class="cicon" id="fsbtn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5"/></svg></button>
+          <button type="button" class="cicon" id="stylebtn" title="Switch to analog clock" aria-label="Switch to analog clock"></button>
         </div>
       </div>
     </section>
@@ -2232,9 +2347,17 @@ function buildFace(style){
   digits.className = "digits d-" + (state.settings.digitStyle || "plain") +
     (style === "analog" ? "" : " inset");
   faceBuilt = style + "|" + (state.settings.analogStyle||"ticks") + "|" + (state.settings.digitStyle||"plain");
-  document.getElementById("stylebtn").textContent =
-    style === "analog" ? "Digital" : "Analog";
+  // The button shows the style it switches TO, as a small icon.
+  var sb = document.getElementById("stylebtn"), toDigital = style === "analog";
+  sb.innerHTML = toDigital ? ICON_DIGITAL : ICON_ANALOG;
+  sb.title = toDigital ? "Switch to digital clock" : "Switch to analog clock";
+  sb.setAttribute("aria-label", sb.title);
 }
+// Small line icons (24px grid, drawn in the current text colour).
+var ICON_ANALOG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>';
+var ICON_DIGITAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/>' +
+  '<path d="M6.5 9.5h3v5h-3z M14.5 9.5h3v5h-3z"/><path d="M12 10.3v.01 M12 13.7v.01" stroke-width="2.4"/></svg>';
+var ICON_FULLSCREEN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5"/></svg>';
 
 function renderTod(){
   var el = document.getElementById("tod");
