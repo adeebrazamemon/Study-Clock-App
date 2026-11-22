@@ -144,6 +144,8 @@
   .mode-row .msep{flex:none;width:1px;align-self:stretch;margin:4px 3px;background:var(--line)}
   /* Narrow cards: "Short" and "Long" so all four tabs stay on one line. */
   @container clock (max-width:439px){ .mode-row .mb{display:none} }
+  /* Same in the side-by-side landscape-phone layout, where the tabs share a column. */
+  @container clock (min-aspect-ratio:7/4) and (max-height:420px){ .mode-row .mb{display:none} }
   /* Lock in has no Reset (the session just ends). */
   body.lockin #reset{display:none !important}
 
