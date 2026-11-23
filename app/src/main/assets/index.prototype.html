@@ -4412,24 +4412,98 @@ var Ambient = (function(){
     s.start(0, Math.random()*buf.duration);
     return {gain:g, stop:function(when){ try{ s.stop(when); }catch(e){} oscs.forEach(function(o){ try{ o.stop(when); }catch(e){} }); }};
   }
-  var BUILD = {
-    brown:function(c, b){ return [loop(c, b, buffer("brown", 9, "brown"), .9, [["lowpass", 700]])]; },
-    rain:function(c, b){ return [
+  /* ----- recordings -----
+     Rain, wind, birds, fire and library are real recordings (CC0, bundled in
+     sounds/, credits in sounds/CREDITS.txt). Each is decoded at 32 kHz
+     (plenty for ambience, a third less memory than 48k), kept to ~100 s, its
+     last 2 s crossfaded into its start so the loop has no seam, and evened
+     out to one loudness. Only the sound playing keeps its recordings in
+     memory. If a file can't be had, the synthesised version plays instead. */
+  var recs = {}, REC_RATE = 32000, REC_MAX = 100;
+  var REC_USE = {rain:["rain-light.mp3", "rain-heavy.mp3"], wind:["wind.mp3", "birds.mp3"], fire:["fire.mp3"], library:["library.mp3"]};
+  function fetchRec(name){
+    // The app loads the page from file:///android_asset, where fetch() can't
+    // read files; it hands them over through the bridge instead.
+    if(location.protocol === "file:" && window.AndroidTimer && window.AndroidTimer.readSound){
+      return new Promise(function(res, rej){
+        setTimeout(function(){
+          try{
+            var b64 = window.AndroidTimer.readSound(name);
+            if(!b64) return rej(new Error("missing " + name));
+            var bin = atob(b64), u = new Uint8Array(bin.length);
+            for(var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+            res(u.buffer);
+          }catch(e){ rej(e); }
+        }, 0);
+      });
+    }
+    return fetch("sounds/" + name).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); });
+  }
+  function rec(name){
+    if(recs[name]) return recs[name];
+    var p = recs[name] = fetchRec(name).then(function(ab){
+      var oc = new OfflineAudioContext(2, 1, REC_RATE);
+      return new Promise(function(res, rej){ oc.decodeAudioData(ab, res, rej); });   // callback form: older WebViews
+    }).then(function(b){
+      var f = Math.floor(2*b.sampleRate), n = Math.min(b.length, Math.floor(REC_MAX*b.sampleRate) + f);
+      if(n <= 4*f) return b;
+      var ch = [], sum = 0, c, i;
+      for(c = 0; c < b.numberOfChannels; c++){
+        var d = b.getChannelData(c).slice(0, n);
+        for(i = 0; i < f; i++){ var t = i/f; d[i] = d[i]*Math.sqrt(t) + d[n - f + i]*Math.sqrt(1 - t); }   // equal-power seam
+        d = d.subarray(0, n - f);
+        for(i = 0; i < d.length; i++) sum += d[i]*d[i];
+        ch.push(d);
+      }
+      // One loudness for every recording (RMS .12). The odd loud moment above
+      // .8 is rounded off gently rather than clipped.
+      var rms = Math.sqrt(sum/(ch.length*(n - f))) || 1, k = Math.min(40, .12/rms);
+      var out = new AudioBuffer({numberOfChannels:ch.length, length:n - f, sampleRate:b.sampleRate});
+      ch.forEach(function(d2, c2){
+        for(var j = 0; j < d2.length; j++){
+          var v = d2[j]*k, a = v < 0 ? -v : v;
+          if(a > .8){ a = .8 + .19*Math.tanh((a - .8)/.19); v = v < 0 ? -a : a; }
+          d2[j] = v;
+        }
+        out.copyToChannel(d2, c2);
+      });
+      return out;
+    });
+    p.catch(function(){ if(recs[name] === p) delete recs[name]; });   // try again next time
+    return p;
+  }
+  // A layer that plays a recording, fading in once it's ready (or the
+  // synthesised `fallback` layers, if it can't be loaded).
+  function recLoop(c, bus, name, gain, fallback){
+    var g = c.createGain(); g.gain.value = gain; g.connect(bus);
+    var fade = c.createGain(); fade.gain.value = 0; fade.connect(g);
+    var s = null, dead = false, fb = null;
+    var up = function(){ fade.gain.setTargetAtTime(1, c.currentTime, .15); };
+    rec(name).then(function(b){
+      if(dead) return;
+      s = c.createBufferSource(); s.buffer = b; s.loop = true; s.connect(fade);
+      s.start(0, Math.random()*b.duration); up();
+    }, function(){ if(!dead && fallback){ fb = fallback(c, fade); up(); } });
+    return {gain:g, stop:function(when){
+      dead = true;
+      if(s) try{ s.stop(when); }catch(e){}
+      if(fb) fb.forEach(function(l){ l.stop(when); });
+    }};
+  }
+  // The synthesised sounds: brown noise and waves always, the rest as fallbacks.
+  var SYNTH = {
+    rainLight:function(c, b){ return [
       loop(c, b, buffer("rainroar", 11, "pink", null, true), .5, [["highpass", 180], ["lowpass", 2600]]),
       loop(c, b, buffer("rainsizzle", 9, "white", null, true), .1, [["highpass", 4200]]),
       loop(c, b, buffer("raindrops", 8, "none", rainDrops(700, false), true), .9),
-      loop(c, b, buffer("rainheavy", 7, "none", rainDrops(1800, true), true), 0),
       loop(c, b, buffer("raindrips", 13, "none", nearDrips, true), .6)
     ]; },
-    waves:function(c, b){ return [
-      loop(c, b, buffer("waves", 31, "brown", function(ch, n){ wavesSwell(ch, n); }), .9, [["lowpass", 900]]),
-      loop(c, b, buffer("foam", 23, "pink", function(ch, n){ wavesSwell(ch, n); }), .22, [["highpass", 1200], ["lowpass", 5000]])
-    ]; },
+    rainHeavy:function(c, b){ return [loop(c, b, buffer("rainheavy", 7, "none", rainDrops(1800, true), true), 1)]; },
     wind:function(c, b){ return [
       loop(c, b, buffer("windbody", 17, "pink", swell(3.5, .12, 1), true), .95, [["lowpass", 700, .7, .07, 260], ["highpass", 90]]),
-      loop(c, b, buffer("windwhistle", 13, "pink", swell(2.5, 0, 1)), .12, [["bandpass", 1150, 9, .045, 380]]),
-      loop(c, b, buffer("birds", 37, "none", birdsong, true), 1)
+      loop(c, b, buffer("windwhistle", 13, "pink", swell(2.5, 0, 1)), .12, [["bandpass", 1150, 9, .045, 380]])
     ]; },
+    birds:function(c, b){ return [loop(c, b, buffer("birds", 37, "none", birdsong, true), 1)]; },
     fire:function(c, b){ return [
       loop(c, b, buffer("fireroar", 11, "brown", swell(.5, .45, 1)), .7, [["lowpass", 320]]),
       loop(c, b, buffer("firebreath", 9, "pink", swell(.35, .1, 1)), .06, [["bandpass", 1600, .8]]),
@@ -4441,6 +4515,23 @@ var Ambient = (function(){
       loop(c, b, buffer("library", 53, "none", libraryLife, true), 1)
     ]; }
   };
+  var BUILD = {
+    brown:function(c, b){ return [loop(c, b, buffer("brown", 9, "brown"), .9, [["lowpass", 700]])]; },
+    rain:function(c, b){ return [
+      recLoop(c, b, "rain-light.mp3", .9, SYNTH.rainLight),
+      recLoop(c, b, "rain-heavy.mp3", 0, SYNTH.rainHeavy)
+    ]; },
+    wind:function(c, b){ return [
+      recLoop(c, b, "wind.mp3", .75, SYNTH.wind),
+      recLoop(c, b, "birds.mp3", .8, SYNTH.birds)
+    ]; },
+    fire:function(c, b){ return [recLoop(c, b, "fire.mp3", 1, SYNTH.fire)]; },
+    library:function(c, b){ return [recLoop(c, b, "library.mp3", 1, SYNTH.library)]; },
+    waves:function(c, b){ return [
+      loop(c, b, buffer("waves", 31, "brown", function(ch, n){ wavesSwell(ch, n); }), .9, [["lowpass", 900]]),
+      loop(c, b, buffer("foam", 23, "pink", function(ch, n){ wavesSwell(ch, n); }), .22, [["highpass", 1200], ["lowpass", 5000]])
+    ]; }
+  };
   // Waves: slow swells, each with its own length, baked over the noise.
   function wavesSwell(ch, n){
     var t = 0, d = ch[0];
@@ -4450,11 +4541,13 @@ var Ambient = (function(){
       t += L;
     }
   }
+  // Rain follows the scene's weather: light rain swelling (L .3 = drizzle),
+  // the heavy recording joining it toward a downpour (L 1), and almost
+  // nothing left once the sky clears (L 0).
   function rainLevel(layers, L, now, tc){
-    layers[0].gain.gain.setTargetAtTime(.08 + .6*L, now, tc);    // clear sky: just the drips
-    layers[1].gain.gain.setTargetAtTime(.02 + .12*L, now, tc);
-    layers[2].gain.gain.setTargetAtTime(.25 + .75*L, now, tc);
-    layers[3].gain.gain.setTargetAtTime(.9*Math.max(0, L - .35)/.65, now, tc);
+    var heavy = Math.max(0, (L - .35)/.65);
+    layers[0].gain.gain.setTargetAtTime((.12 + .88*Math.min(1, L/.35))*(1 - .45*heavy), now, tc);
+    layers[1].gain.gain.setTargetAtTime(heavy*heavy*(3 - 2*heavy), now, tc);
   }
   return {
     // id: which sound ("off" for none); on: whether it should be audible now;
@@ -4472,6 +4565,9 @@ var Ambient = (function(){
           setTimeout(function(){ try{ old.bus.disconnect(); }catch(e){} }, 700);
         }
         cur = null; curId = id;
+        // Free the recordings the new sound doesn't use.
+        var keep = REC_USE[id] || [];
+        for(var nm in recs) if(keep.indexOf(nm) < 0) delete recs[nm];
         if(id !== "off" && BUILD[id]){
           var bus = ctx.createGain(); bus.gain.value = 0; bus.connect(master);
           cur = {bus:bus, layers:BUILD[id](ctx, bus)};
@@ -4487,10 +4583,13 @@ var Ambient = (function(){
     // Build a sound's loops ahead of time (idle, after startup), so the first
     // time it plays it starts at once.
     warm:function(id){
+      if(REC_USE[id]){ REC_USE[id].forEach(function(nm){ rec(nm).catch(function(){}); }); return; }
       if(!BUILD[id] || !window.OfflineAudioContext) return;
       try{ var oc = new OfflineAudioContext(1, 1, RATE); BUILD[id](oc, oc.createGain()); }catch(e){}
     },
-    // Dev tool (local server only): render a sound offline for checking levels.
+    // Dev tools (local server only): the loaded recordings, and an offline
+    // render of a sound for checking levels.
+    recording:function(name){ return recs[name] || rec(name); },
     render:function(id, secs){
       var oc = new OfflineAudioContext(2, Math.floor(secs*44100), 44100), bus = oc.createGain();
       bus.connect(oc.destination);

@@ -352,6 +352,24 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
+        /** One of the bundled ambient recordings (assets/sounds/NAME.mp3), as
+         *  base64, or "" if there's no such file. The page is loaded from
+         *  file:///android_asset, where fetch() can't read other files; this
+         *  reads only that one folder, and only plain names like "rain-light.mp3". */
+        @JavascriptInterface
+        public String readSound(String name) {
+            if (name == null || !name.matches("[a-z0-9-]{1,40}\\.mp3")) return "";
+            try (java.io.InputStream in = getAssets().open("sounds/" + name)) {
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                return android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP);
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
         @JavascriptInterface
         public void stopTimer() {
             runOnUiThread(new Runnable() {

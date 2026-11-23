@@ -1,0 +1,18 @@
+Ambient recordings used by Study Clock. All are released under
+Creative Commons 0 (public domain dedication) on Freesound.org; credit is
+not required, but given here with thanks. Files are Freesound's 128 kbps
+MP3 previews (library.mp3 shortened to its first ~2.5 minutes).
+
+rain-light.mp3  "Rain light 2 (rural)" by jmbphilmes
+                https://freesound.org/people/jmbphilmes/sounds/200273/
+rain-heavy.mp3  "Rain heavy 2 (rural)" by jmbphilmes
+                https://freesound.org/people/jmbphilmes/sounds/200272/
+fire.mp3        "Fire in Fireplace, Close Up, Reverberant 2" by silencyo
+                https://freesound.org/people/silencyo/sounds/81801/
+wind.mp3        "wind in trees" by chimerical
+                https://freesound.org/people/chimerical/sounds/104282/
+birds.mp3       "forest-birds3a" by pborel
+                https://freesound.org/people/pborel/sounds/474342/
+library.mp3     "Students at the Library, Whispering at Bibliotheque Nationale
+                de France - Richelieu (Oval Room)" by alberto_cendra_woodman
+                https://freesound.org/people/alberto_cendra_woodman/sounds/742477/
