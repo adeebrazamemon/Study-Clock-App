@@ -16,8 +16,8 @@ android {
         applicationId "app.studyclock"
         minSdk 24
         targetSdk 35
-        versionCode 45
-        versionName "4.7.6"
+        versionCode 46
+        versionName "4.7.7"
     }
 
     signingConfigs {
