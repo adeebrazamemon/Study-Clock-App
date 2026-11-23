@@ -1,0 +1,3 @@
+# Firebase config for the Android app: kept out of the public repo. The APK
+# build writes it from the GOOGLE_SERVICES_JSON repository secret.
+app/google-services.json

@@ -52,6 +52,20 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
+      # Firebase Analytics config (app/google-services.json) lives in the
+      # GOOGLE_SERVICES_JSON repository secret, not in the public repo. Without
+      # the secret the build still works; the app just doesn't report analytics.
+      - name: Write google-services.json from secret
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "google-services.json written ($(wc -c < app/google-services.json) bytes)"
+          else
+            echo "GOOGLE_SERVICES_JSON secret not set: building without Firebase Analytics"
+          fi
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
