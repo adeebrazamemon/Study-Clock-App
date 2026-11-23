@@ -1199,6 +1199,9 @@
       <select id="in-scene-clock"><option value="minimal">Minimal card</option><option value="regular">Regular clock</option></select>
     </div>
     <div class="field"><label for="in-scene-motion">Movement</label><input type="checkbox" id="in-scene-motion"></div>
+    <div class="field"><label for="in-blur">Frosted glass <span class="hint">(this device)</span></label>
+      <select id="in-blur"><option value="auto">Auto (off on phones)</option><option value="on">On</option><option value="off">Off</option></select>
+    </div>
     <div class="field-col" id="f-scene-preview"><label for="in-scene-preview">Preview the day <span class="hint" id="scene-preview-val"></span></label>
       <input type="range" id="in-scene-preview" min="0" max="1000" value="0">
     </div>
@@ -3273,9 +3276,20 @@ function chime(){
 
 /* ---------- Android bridge (inert on the web) ---------- */
 var NATIVE = (typeof window.AndroidTimer !== "undefined");
-// Phones: lighter rendering (see html.lite in the CSS).
-var LITE = NATIVE || !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
-if(LITE) document.documentElement.classList.add("lite");
+/* Frosted glass behind the cards over a scene (see html.lite in the CSS): a
+   setting kept on THIS device only, since what a phone can afford differs
+   from a tablet. "auto" blurs everywhere except phones (a touch screen whose
+   short side is under 600px, or the Android app on one); "on"/"off" force it. */
+var BLUR_KEY = "studyClock.v1.blur", LITE = false;
+function blurPref(){ try{ return localStorage.getItem(BLUR_KEY) || "auto"; }catch(e){ return "auto"; } }
+function applyBlur(){
+  var pref = blurPref();
+  var touch = NATIVE || !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  var phone = touch && Math.min(screen.width, screen.height) < 600;
+  LITE = pref === "off" || (pref === "auto" && phone);
+  document.documentElement.classList.toggle("lite", LITE);
+}
+applyBlur();
 /* Whether the service currently has a notification up. Without this the page
    would post a paused notification on first load, before anything has run. */
 var nativeLive = false;
@@ -3652,6 +3666,7 @@ function renderSceneGallery(){
   document.getElementById("f-scene-preview").classList.toggle("off", !has);
   document.getElementById("in-scene-drive").value = state.settings.sceneDrive || "goal";
   document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
+  document.getElementById("in-blur").value = blurPref();
   document.getElementById("in-scene-clock").value = state.settings.sceneClock === "regular" ? "regular" : "minimal";
   document.getElementById("f-scene-clock").classList.toggle("off", !has);
   var pv = document.getElementById("in-scene-preview");
@@ -4906,6 +4921,10 @@ document.getElementById("in-scene-clock").addEventListener("change", function(){
     state.settings.ambientFocus = document.getElementById("in-ambient-focus").checked;
     save(true); syncAmbientInputs(); ambientKey = ""; syncAmbient();
   });
+});
+document.getElementById("in-blur").addEventListener("change", function(){
+  try{ localStorage.setItem(BLUR_KEY, document.getElementById("in-blur").value); }catch(e){}
+  applyBlur(); glassKey = ""; updateGlass();   // the tint is a little stronger without blur
 });
 document.getElementById("in-scene-motion").addEventListener("change", function(){
   state.settings.sceneMotion = document.getElementById("in-scene-motion").checked;
