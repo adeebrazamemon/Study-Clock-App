@@ -594,6 +594,9 @@
     margin:0 -6px;padding:0 6px}
   .appinfo{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
   .appinfo .hint{margin:0 0 4px}
+  /* "Add a category first": a gentle note at the top of Categories. */
+  .cat-ask{margin:0 0 12px;padding:10px 13px;border-radius:10px;font-size:13.5px;line-height:1.45;
+    background:var(--focus-soft);color:var(--focus-text);border:1px solid color-mix(in srgb,var(--focus) 35%,transparent)}
   /* Short screens: tighter rows so most tabs fit without scrolling at all. */
   @media (max-height:700px){
     #dlg-settings{padding:16px 20px}
@@ -1276,6 +1279,7 @@
 
 <dialog id="dlg-cats">
   <h2>Categories</h2>
+  <p class="cat-ask" id="cat-ask" hidden></p>
   <p class="hint">Removing a category keeps its logged hours in your history.</p>
   <div id="catlist"></div>
   <div class="field" style="margin-top:14px">
@@ -3193,7 +3197,27 @@ function lockInEnded(secs){
   }
 }
 // The Start/End button (and Space): ending a lock-in asks first.
+// Time and to-dos belong to a category, so with none yet, ask for one first:
+// Categories opens with a short note, and once one is added, what you were
+// doing carries on. Returns true when it had to ask.
+var catPending = null;
+function needCategory(why, then){
+  if(state.categories.some(function(c){ return !c.archived; })) return false;
+  var msg = {
+    start:"Add a category first, so your study time has somewhere to go. Once it's here, your timer starts.",
+    task:"Add a category first, so your to-dos have a home. Your to-do will be added right after.",
+    manual:"Add a category first, then you can log time to it."
+  }[why];
+  var ask = document.getElementById("cat-ask");
+  ask.textContent = msg; ask.hidden = false;
+  catPending = then || null;
+  openCats();
+  var ni = document.getElementById("newcat"); if(ni) ni.focus();
+  return true;
+}
 function startStop(){
+  // Starting a focus block or lock-in logs time, which needs a category.
+  if(!running && focusLike(mode) && needCategory("start", startStop)) return;
   if(running && mode === "lockin"){
     document.getElementById("lockend-body").textContent =
       "You've been locked in for " + fmtDur(lockElapsed()) + ". Ending stops the session; the time is already saved." +
@@ -4961,6 +4985,11 @@ function addTask(){
   var inp = document.getElementById("newtask");
   var text = inp.value.trim();
   if(!text){ inp.focus(); return; }
+  if(needCategory("task", addTask)) return;
+  if(!state.activeCat || !getCat(state.activeCat) || getCat(state.activeCat).archived){
+    var firstLive = state.categories.filter(function(c){ return !c.archived; })[0];
+    state.activeCat = firstLive ? firstLive.id : null;
+  }
   state.tasks.push({
     id:"t"+Date.now().toString(36), text:text,
     catId:state.activeCat, done:false, doneDate:null,
@@ -5471,10 +5500,17 @@ function renderCatList(){
       row.appendChild(grip);
     }
     row.appendChild(swatch); row.appendChild(nm);
-    if(live.length > 1){
+    {
       var del = document.createElement("button");
       del.textContent = "Remove";
       del.addEventListener("click", function(){
+        // The last one can go too, just not mid-block: the running time is logged to it.
+        if(live.length === 1 && running && focusLike(mode)){
+          var ask = document.getElementById("cat-ask");
+          ask.textContent = "Your timer is logging time to this category. Stop it first, then you can remove it.";
+          ask.hidden = false;
+          return;
+        }
         c.archived = true;
         if(state.activeCat === c.id){
           var rest = state.categories.filter(function(x){return !x.archived;});
@@ -5647,11 +5683,19 @@ document.getElementById("cat-add").addEventListener("click", function(){
     id = "c" + Date.now().toString(36);
     state.categories.push({id:id, name:name, color:PALETTE[state.categories.length % PALETTE.length], archived:false});
   }
-  if(!state.activeCat) state.activeCat = id;
+  if(!state.activeCat || !getCat(state.activeCat) || getCat(state.activeCat).archived) state.activeCat = id;
   inp.value = "";
   save(true); renderCatList(); renderAll();
+  // Asked for a category on the way to something else: carry on with it.
+  if(catPending){
+    var then = catPending; catPending = null;
+    dlgCats.close();
+    then();
+  }
 });
 document.getElementById("cat-close").addEventListener("click", function(){ dlgCats.close(); });
+// Leaving Categories drops the note (and whatever was waiting on it).
+dlgCats.addEventListener("close", function(){ catPending = null; document.getElementById("cat-ask").hidden = true; });
 
 var dlgConfirm = document.getElementById("dlg-confirm");
 var confirmOkBtn = document.getElementById("confirm-ok");
@@ -5682,7 +5726,8 @@ dlgConfirm.addEventListener("cancel", function(){ pendingConfirmYes = null; });
 var dlgManual = document.getElementById("dlg-manual");
 // "2026-09-09" -> "09/09/26" for the custom date display.
 function fmtDMY(iso){ if(!iso) return "--"; var p = iso.split("-"); return p[2] + "/" + p[1] + "/" + p[0].slice(2); }
-document.getElementById("open-manual").addEventListener("click", function(){
+document.getElementById("open-manual").addEventListener("click", function openManual(){
+  if(needCategory("manual", openManual)) return;
   var sel = document.getElementById("man-cat");
   sel.innerHTML = "";
   state.categories.filter(function(c){return !c.archived;}).forEach(function(c){
