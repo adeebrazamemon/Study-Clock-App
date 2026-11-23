@@ -872,6 +872,13 @@
     background:var(--glass);border-color:var(--glass-line);
     -webkit-backdrop-filter:blur(18px) saturate(1.15);backdrop-filter:blur(18px) saturate(1.15)}
   body.scene .card{box-shadow:0 10px 30px -12px rgba(0,0,0,.35)}
+  /* Phones (the Android app, touch screens): no live blur behind the cards. A
+     backdrop blur is redone on every repaint over the scene, and on a phone's
+     GPU that is the main cost of a scene; the tint alone (a little more opaque,
+     see updateGlass) reads the same. The small full-screen card keeps its blur. */
+  html.lite body.scene .card,html.lite body.scene .ovpill,html.lite body.scene .tabs,
+  html.lite body.scene header.top .iconbtn,html.lite body.scene .footer,
+  html.lite body.scene.fs #page-clock .clockwrap{-webkit-backdrop-filter:none;backdrop-filter:none}
   body.scene .footer{border:1px solid var(--glass-line);border-radius:var(--radius);padding:9px 14px;width:fit-content;max-width:100%}
   body.scene header.top h1{color:var(--scene-ink);text-shadow:0 1px 12px var(--scene-shadow)}
   /* Full screen is where a scene shows best. The clock floats in the middle
@@ -2199,9 +2206,12 @@ window.Scenes = {
 })();
 </script>
 <!-- @scenes-end -->
-<script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore-compat.js"></script>
+<!-- Firebase (sync) ships with the app in vendor/ -- same version as Google's CDN,
+     but no download before the page can start, and it works offline. The web
+     deploy publishes vendor/ next to index.html. -->
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
 
 <script>
 (function(){
@@ -3178,7 +3188,7 @@ function tick(){
       // Show the other device's countdown live.
       remaining = Math.max(0, (mirror.end - now)/1000);
       blockCommitted = blockLen - remaining;
-      renderClock();
+      drawClock();
     }
     renderTod();
     return;
@@ -3197,6 +3207,16 @@ function tick(){
   if(now - lastRunSave > 20000){ lastRunSave = now; save(true); }
   else { save(false); }
   if(remaining <= 0){ blockFinished(); }
+  drawClock();
+}
+/* The clock shows whole seconds, so it's redrawn when that second changes --
+   not on every 250ms tick (on a phone every redraw costs, especially over a
+   scene). Anything else that changes the clock calls renderClock() itself. */
+var drawnSec = null;
+function drawClock(){
+  var sec = mode + ":" + running + ":" + Math.ceil(remaining);
+  if(sec === drawnSec) return;
+  drawnSec = sec;
   renderClock();
 }
 function blockFinished(){
@@ -3248,6 +3268,9 @@ function chime(){
 
 /* ---------- Android bridge (inert on the web) ---------- */
 var NATIVE = (typeof window.AndroidTimer !== "undefined");
+// Phones: lighter rendering (see html.lite in the CSS).
+var LITE = NATIVE || !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+if(LITE) document.documentElement.classList.add("lite");
 /* Whether the service currently has a notification up. Without this the page
    would post a paused notification on first load, before anything has run. */
 var nativeLive = false;
@@ -3550,7 +3573,7 @@ function updateGlass(){
   var surf = parseColor(cs.getPropertyValue("--surface")), ink = parseColor(cs.getPropertyValue("--ink")),
       muted = parseColor(cs.getPropertyValue("--muted"));
   if(!surf || !ink || !muted) return;
-  var a = 0.55, bgs;
+  var a = LITE ? 0.72 : 0.55, bgs;   // without blur (phones), a touch more opaque
   for(; a < 0.96; a += 0.02){
     bgs = tones.map(function(t){ return mixRgb(t, surf, a); });
     if(bgs.every(function(bg){ return contrastRatio(ink, bg) >= 7 && contrastRatio(muted, bg) >= 4.5; })) break;
@@ -3691,9 +3714,13 @@ var ICON_FULLSCREEN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9
 function renderTod(){
   var el = document.getElementById("tod");
   if(!el) return;
-  el.style.display = (state.settings.showTod === false) ? "none" : "";
-  el.textContent = new Date().toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+  var disp = (state.settings.showTod === false) ? "none" : "";
+  if(el.style.display !== disp) el.style.display = disp;
+  setText(el, new Date().toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}));
 }
+// Writes text only when it changed: rewriting identical text still makes the
+// browser lay out and repaint, which adds up on a phone over a scene.
+function setText(el, s){ if(el && el.textContent !== s) el.textContent = s; }
 
 function renderClock(){
   var style = state.settings.style;
@@ -3706,19 +3733,18 @@ function renderClock(){
   var label = lock ? fmtElapsed(lockElapsed()) : pad(Math.floor(secs/60))+":"+pad(secs%60);
 
   var digits = document.getElementById("digits");
-  digits.textContent = label;
+  setText(digits, label);
   digits.style.display = (state.settings.showTimeLeft === false) ? "none" : "";
 
   // The minimal scene clock (full screen with a scene on).
   if(document.body.classList.contains("scene") && fsOn){
     var paused = !running && remaining < (blockLen || modeSeconds(mode)) - 0.5;
-    document.getElementById("sc-lbl").textContent =
-      labelFor(mode) + (paused && !lock ? " · Paused" : "");
-    document.getElementById("sc-t").textContent = label;
+    setText(document.getElementById("sc-lbl"), labelFor(mode) + (paused && !lock ? " · Paused" : ""));
+    setText(document.getElementById("sc-t"), label);
     var todayRec = state.days[key(new Date())] || {}, todaySecs = 0, goalSecs = Math.max(1, state.settings.goal*3600);
     for(var tc in todayRec) todaySecs += todayRec[tc];
     document.getElementById("sc-bar").style.width = Math.min(100, todaySecs/goalSecs*100) + "%";
-    document.getElementById("sc-goal").textContent = fmtHM(todaySecs) + " of " + fmtShort(goalSecs) + " today";
+    setText(document.getElementById("sc-goal"), fmtHM(todaySecs) + " of " + fmtShort(goalSecs) + " today");
   }
 
   var total = blockLen || modeSeconds(mode) || 1;
@@ -3748,39 +3774,42 @@ function renderClock(){
   // Pause while running; "Continue here" when another device is running it;
   // "Resume" for a paused block that's partway through; "Start" only for a
   // fresh block (nothing elapsed yet).
-  document.getElementById("startstop").textContent =
+  setText(document.getElementById("startstop"),
     lock ? (running ? "End" : mirror ? "Continue here" : "Start")
-    : running ? "Pause" : mirror ? "Continue here" : (remaining < blockLen - 0.5) ? "Resume" : "Start";
+    : running ? "Pause" : mirror ? "Continue here" : (remaining < blockLen - 0.5) ? "Resume" : "Start");
   // Another device is running the timer: say so, and leave only "Continue
   // here" (Reset/End would act on a block this device isn't running).
+  // (Written only when something actually changes -- this runs every second.)
   var mn = document.getElementById("mirrornote");
-  if(mirror){
-    mn.textContent = "Running on " + (mirror.n || "your other device");
-    mn.hidden = false;
-  }else mn.hidden = true;
-  document.getElementById("reset").hidden = !!mirror;
-  var eb = document.getElementById("endblock");
+  if(mirror) setText(mn, "Running on " + (mirror.n || "your other device"));
+  if(mn.hidden !== !mirror) mn.hidden = !mirror;
+  var rs = document.getElementById("reset");
+  if(rs.hidden !== !!mirror) rs.hidden = !!mirror;
+  var eb = document.getElementById("endblock"), ebShow;
   if(lock){
-    eb.style.display = "none";      // the main button ends a lock-in
+    ebShow = false;      // the main button ends a lock-in
   }else if(mode === "focus"){
-    eb.textContent = "End block";
-    eb.style.display = (running || remaining < blockLen) ? "" : "none";
+    setText(eb, "End block");
+    ebShow = running || remaining < blockLen;
   }else{
-    eb.textContent = "Skip break";
-    eb.style.display = "";          // always skippable
+    setText(eb, "Skip break");
+    ebShow = true;       // always skippable
   }
-  if(mirror) eb.style.display = "none";
+  var ebDisp = (ebShow && !mirror) ? "" : "none";
+  if(eb.style.display !== ebDisp) eb.style.display = ebDisp;
   renderGoalBar();
   var done = state.completed % state.settings.cycles, cn = document.getElementById("cyclenote");
-  if(lock){
-    // The last and best run show where the tabs are (see renderModeButtons).
-    cn.textContent = ""; cn.title = "";
-  }else{
-    cn.textContent = "Session " + (done+1) + " of " + state.settings.cycles;
-    cn.title = "Session " + (done+1) + " of " + state.settings.cycles + " before the long break";
+  var cnText = "", cnTitle = "";
+  // (Lock in: its last and best run show where the tabs are -- see renderModeButtons.)
+  if(!lock){
+    cnText = "Session " + (done+1) + " of " + state.settings.cycles;
+    cnTitle = cnText + " before the long break";
   }
-  document.title = (running ? label + " " : "") +
+  setText(cn, cnText);
+  if(cn.title !== cnTitle) cn.title = cnTitle;
+  var title = (running ? label + " " : "") +
     (lock ? "Lock in" : mode === "focus" ? "Focus" : "Break") + " · Study Clock";
+  if(document.title !== title) document.title = title;
   syncAmbient();
 }
 function renderGoalBar(){
@@ -3788,19 +3817,26 @@ function renderGoalBar(){
   var rec = state.days[k] || {};
   var goal = Math.max(1, state.settings.goal*3600);
   var bar = document.getElementById("goalbar");
-  bar.innerHTML = "";
   var total = 0, ids = Object.keys(rec).sort(function(a,b){return rec[b]-rec[a];});
-  ids.forEach(function(cid){
+  // Same segments as last time (the usual case while a block runs): just
+  // update their widths in place instead of rebuilding the bar every second.
+  var sig = ids.map(function(cid){ return cid + "=" + catColor(cid); }).join("|");
+  if(bar._sig !== sig){
+    bar._sig = sig;
+    bar.innerHTML = "";
+    ids.forEach(function(){ bar.appendChild(document.createElement("span")); });
+  }
+  ids.forEach(function(cid, i){
     total += rec[cid];
-    var seg = document.createElement("span");
-    seg.style.width = Math.min(100, (rec[cid]/goal)*100) + "%";
+    var seg = bar.children[i], w = Math.min(100, (rec[cid]/goal)*100).toFixed(2) + "%";
+    if(seg.style.width !== w) seg.style.width = w;
     seg.style.background = catColor(cid);
-    seg.title = catName(cid) + " " + fmtHM(rec[cid]);
-    bar.appendChild(seg);
+    var tip = catName(cid) + " " + fmtHM(rec[cid]);
+    if(seg.title !== tip) seg.title = tip;
   });
-  document.getElementById("goalnow").innerHTML =
-    "<b>" + fmtHM(total) + "</b>" + (total >= goal ? " \u2713" : "");
-  document.getElementById("goalof").textContent = "of " + fmtShort(goal) + " target";
+  var now = "<b>" + fmtHM(total) + "</b>" + (total >= goal ? " \u2713" : ""), gn = document.getElementById("goalnow");
+  if(gn.innerHTML !== now) gn.innerHTML = now;
+  setText(document.getElementById("goalof"), "of " + fmtShort(goal) + " target");
   checkGoalCelebration(total, goal);
 }
 

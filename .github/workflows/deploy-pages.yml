@@ -1,6 +1,7 @@
 name: Deploy web app to GitHub Pages
 
-# Publishes app/src/main/assets/index.html as-is -- the same file the Android
+# Publishes app/src/main/assets/index.html as-is (plus vendor/, the bundled
+# Firebase scripts it loads) -- the same files the Android
 # WebView loads. There is no separate copy to keep in sync: this workflow is
 # the only thing that ever puts it on the web.
 
@@ -9,6 +10,7 @@ on:
     branches: [main]
     paths:
       - "app/src/main/assets/index.html"
+      - "app/src/main/assets/vendor/**"
   workflow_dispatch:
 
 permissions:
@@ -33,6 +35,8 @@ jobs:
         run: |
           mkdir -p _site
           cp app/src/main/assets/index.html _site/index.html
+          # Firebase ships alongside the page (see the vendor/ scripts in index.html).
+          cp -r app/src/main/assets/vendor _site/vendor
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
