@@ -5610,6 +5610,10 @@ document.addEventListener("keydown", function(e){
     if(e.key === "Enter" && selectedDay){ e.preventDefault(); openDayEditor(selectedDay); return; }
     if(e.key === "Escape" && selectedDay){ e.preventDefault(); selectedDay = null; renderCalendar(); renderBreakdown(); return; }
   }
+  // The single-key shortcuts below never fire with Ctrl/Cmd/Alt held, so the
+  // browser's own shortcuts (Ctrl+R reload, Ctrl+F find, ...) don't also reset
+  // the timer or toggle full screen.
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.code === "Space"){ e.preventDefault(); startStop(); }
   else if((e.key === "r" || e.key === "R") && mode !== "lockin"){ resetBlock(); }   // Lock in has no Reset
   else if(e.key === "f" || e.key === "F"){ setFullscreen(!fsOn); }
