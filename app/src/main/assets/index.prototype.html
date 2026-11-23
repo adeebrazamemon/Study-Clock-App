@@ -516,6 +516,18 @@
   .catrow .dot{width:11px;height:11px;border-radius:50%;flex:none}
   .catrow .nm{flex:1;font-size:14px}
   .catrow button:not(.catcolor){background:none;border:none;color:var(--warn-text);font:inherit;font-size:13px;cursor:pointer;padding:2px 4px}
+  /* Dragging categories into order (see the category drag controller): the
+     same feel as tasks -- press anywhere with a mouse, hold to lift on touch,
+     or grab the grip straight away. */
+  #catlist .catrow{border-radius:10px;background:var(--surface)}
+  #catlist.sortable .catrow{cursor:grab}
+  .catrow .cgrip{flex:none;color:var(--muted);cursor:grab;font-size:13px;letter-spacing:-4px;line-height:1;padding:0 4px 0 0;
+    touch-action:none;-webkit-user-select:none;user-select:none}
+  .catrow.lifted{transform:scale(1.02);box-shadow:0 8px 22px -8px rgba(0,0,0,.45);transition:transform .12s, box-shadow .12s}
+  .catrow.dragging{position:relative;z-index:5;cursor:grabbing;transition:none !important;box-shadow:0 14px 30px -10px rgba(0,0,0,.5)}
+  .catrow.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1) !important}
+  .catrow.settling{transition:transform .16s ease-out !important}
+  body.cat-dragging, body.cat-dragging *{user-select:none;-webkit-user-select:none;cursor:grabbing !important}
   .hint{color:var(--muted);font-size:13px;margin:0 0 13px}
   .footer{margin-top:22px;display:flex;gap:14px;row-gap:9px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
   .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:0}
@@ -553,8 +565,11 @@
   .dtabs button{flex:1;background:none;border:1px solid var(--line);border-radius:999px;
     padding:7px 10px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
   .dtabs button[aria-selected="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus-text);font-weight:600}
-  .dpane{display:none}
-  .dpane.on{display:block}
+  .dpanes{display:grid}
+  .dpane{grid-area:1/1;visibility:hidden;min-width:0}
+  .dpane.on{visibility:visible}
+  /* Optional rows keep their space when they don't apply, so nothing shifts. */
+  .field.off,.field-col.off{visibility:hidden}
 
   .goalwrap{margin-top:18px}
   .goalbar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:var(--line)}
@@ -903,7 +918,7 @@
   .scenecard[aria-pressed="true"] .nm{color:var(--focus-text);font-weight:600}
   .scenecard:focus-visible{outline:none}
   .scenecard:focus-visible .scthumb{outline:2.5px solid var(--ink);outline-offset:2px}
-  .scene-blurb{color:var(--muted);font-size:13px;margin:0 0 14px;min-height:2.6em}
+  .scene-blurb{color:var(--muted);font-size:13px;margin:0 0 14px;min-height:4.5em}
   .field-col input[type=range]{width:100%;accent-color:var(--focus)}
   /* While picking a scene, dim the page behind the dialog less so you can see it. */
   #dlg-settings.scenes-open::backdrop{background:rgba(0,0,0,.12)}
@@ -1083,6 +1098,9 @@
     <button data-pane="sync" aria-selected="false">Sync</button>
   </div>
 
+  <!-- All four tabs share one grid cell, so the window is always as tall as
+       the tallest tab and never jumps when you switch. -->
+  <div class="dpanes">
   <div class="dpane on" id="pane-gen">
     <div class="field"><label for="in-focus">Focus length (minutes)</label><input type="number" id="in-focus" min="1" max="180"></div>
     <div class="field"><label for="in-short">Short break (minutes)</label><input type="number" id="in-short" min="1" max="60"></div>
@@ -1117,7 +1135,6 @@
   </div>
 
   <div class="dpane" id="pane-app">
-    <p class="hint">Changes here apply straight away, so you can leave this open while you look.</p>
     <div class="field"><label for="in-theme">App appearance</label>
       <select id="in-theme">
         <option value="auto">Match device</option>
@@ -1177,6 +1194,7 @@
 
   <div class="dpane" id="pane-sync">
     <div id="sync-box"></div>
+  </div>
   </div>
 
   <!-- A quick, no-guessing way to confirm a sideloaded APK actually
@@ -3600,12 +3618,14 @@ function renderSceneGallery(){
   });
   document.getElementById("scene-blurb").textContent = blurb;
   var has = cur !== "none";
-  document.getElementById("f-scene-drive").hidden = !(has && scenesReady() && Scenes.supportsTime(cur));
-  document.getElementById("f-scene-preview").hidden = !has || !DEV_PREVIEW;
+  // Rows that don't apply stay in place, invisible ("off"), so the window doesn't resize.
+  document.getElementById("f-scene-drive").classList.toggle("off", !(has && scenesReady() && Scenes.supportsTime(cur)));
+  document.getElementById("f-scene-preview").hidden = !DEV_PREVIEW;   // dev-only: never takes space in the app
+  document.getElementById("f-scene-preview").classList.toggle("off", !has);
   document.getElementById("in-scene-drive").value = state.settings.sceneDrive || "goal";
   document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
   document.getElementById("in-scene-clock").value = state.settings.sceneClock === "regular" ? "regular" : "minimal";
-  document.getElementById("f-scene-clock").hidden = !has;
+  document.getElementById("f-scene-clock").classList.toggle("off", !has);
   var pv = document.getElementById("in-scene-preview");
   if(scenePreview === null) pv.value = Math.round((sceneShown || 0)*1000);
   document.getElementById("scene-preview-val").textContent = Math.round(pv.value/10) + "%";
@@ -4031,8 +4051,8 @@ function syncAmbientInputs(){
   document.getElementById("in-ambient").value = a;
   document.getElementById("in-ambient-vol").value = +state.settings.ambientVol || 50;
   document.getElementById("in-ambient-focus").checked = state.settings.ambientFocus !== false;
-  document.getElementById("f-amb-vol").hidden = a === "off";
-  document.getElementById("f-amb-focus").hidden = a === "off";
+  document.getElementById("f-amb-vol").classList.toggle("off", a === "off");
+  document.getElementById("f-amb-focus").classList.toggle("off", a === "off");
 }
 // Browsers only allow sound after you interact; pick up then if it should be playing.
 document.addEventListener("pointerdown", function(){ ambientKey = ""; syncAmbient(); }, {passive:true});
@@ -4774,6 +4794,7 @@ function fillSettingsInputs(){
   document.getElementById("in-sound").checked = state.settings.sound;
   document.getElementById("in-celebrate").checked = state.settings.celebrate !== false;
   syncAmbientInputs();
+  renderSceneGallery();   // built up front so the Scenes tab is already full size
   for(var el in APPEARANCE) document.getElementById(el).value = state.settings[APPEARANCE[el]];
   document.getElementById("in-tod").checked = state.settings.showTod !== false;
   document.getElementById("in-timeleft").checked = state.settings.showTimeLeft !== false;
@@ -4950,9 +4971,11 @@ function renderCatList(){
   var list = document.getElementById("catlist");
   list.innerHTML = "";
   var live = state.categories.filter(function(c){return !c.archived;});
+  list.classList.toggle("sortable", live.length > 1 && !openPaletteFor);
   live.forEach(function(c){
     var row = document.createElement("div");
     row.className = "catrow";
+    row.setAttribute("data-cid", c.id);
     // A big colour dot; tapping it opens a palette under the row. (The bare
     // native colour input was a small target, and on Android it opens a
     // clunky system dialog.)
@@ -4967,6 +4990,11 @@ function renderCatList(){
     });
     var nm = document.createElement("span");
     nm.className = "nm"; nm.textContent = c.name;
+    if(live.length > 1){
+      var grip = document.createElement("span");
+      grip.className = "cgrip"; grip.setAttribute("aria-hidden", "true"); grip.textContent = "⋮⋮";
+      row.appendChild(grip);
+    }
     row.appendChild(swatch); row.appendChild(nm);
     if(live.length > 1){
       var del = document.createElement("button");
@@ -4985,6 +5013,117 @@ function renderCatList(){
     if(openPaletteFor === c.id) list.appendChild(buildPalette(c));
   });
 }
+
+/* ---------- reordering categories by dragging ----------
+   Same feel as the to-do list: a mouse drags a row from anywhere on it; on
+   touch, press and HOLD to lift it (a quick swipe still scrolls), or grab the
+   ⋮⋮ grip straight away. The others slide out of its way; letting go settles
+   it into place and saves the new order, which syncs like the to-do order.
+   (Not while a colour palette is open under a row.) */
+(function(){
+  var list = document.getElementById("catlist");
+  var HOLD = 280, SLOP = 6;
+  var P = null, D = null, swallowClick = false;
+  function cancelPress(){
+    if(P){ clearTimeout(P.timer); P.row.classList.remove("lifted"); }
+    P = null;
+  }
+  list.addEventListener("pointerdown", function(e){
+    if(e.button !== 0 || D || !list.classList.contains("sortable")) return;
+    var row = e.target.closest(".catrow");
+    if(!row || !list.contains(row)) return;
+    var onGrip = !!e.target.closest(".cgrip");
+    if(!onGrip && e.target.closest("button, input")) return;   // colour dot, Remove
+    var mouse = e.pointerType === "mouse";
+    P = { row: row, x: e.clientX, y: e.clientY, id: e.pointerId, armed: mouse || onGrip };
+    if(!P.armed){
+      P.timer = setTimeout(function(){
+        if(!P) return;
+        P.armed = true;
+        P.row.classList.add("lifted");
+        if(navigator.vibrate) try{ navigator.vibrate(12); }catch(_){}
+      }, HOLD);
+    }
+  });
+  window.addEventListener("pointermove", function(e){
+    if(D){ if(e.pointerId === D.id){ D.lastY = e.clientY; moveDrag(); } return; }
+    if(!P || e.pointerId !== P.id) return;
+    if(Math.hypot(e.clientX - P.x, e.clientY - P.y) < SLOP) return;
+    if(!P.armed){ cancelPress(); return; }   // moved before the hold: it's a scroll
+    beginDrag(e);
+  }, { passive: true });
+  list.addEventListener("touchmove", function(e){ if(D || (P && P.armed)) e.preventDefault(); }, { passive: false });
+  window.addEventListener("pointerup", function(e){
+    if(D){ if(e.pointerId === D.id) endDrag(false); return; }
+    if(P && e.pointerId === P.id) cancelPress();
+  });
+  window.addEventListener("pointercancel", function(e){
+    if(D){ if(e.pointerId === D.id) endDrag(true); }
+    else cancelPress();
+  });
+  list.addEventListener("click", function(e){
+    if(swallowClick){ swallowClick = false; e.stopPropagation(); e.preventDefault(); }
+  }, true);
+
+  function center(d, i){ return d.rects[i].top + d.rects[i].height/2; }
+  function beginDrag(e){
+    var row = P.row;
+    clearTimeout(P.timer);
+    var rows = Array.prototype.slice.call(list.querySelectorAll(".catrow"));
+    D = { id: P.id, row: row, rows: rows, rects: rows.map(function(r){ return r.getBoundingClientRect(); }),
+          from: rows.indexOf(row), startY: P.y, lastY: e.clientY };
+    D.to = D.from;
+    P = null;
+    swallowClick = true;
+    row.classList.remove("lifted");
+    row.classList.add("dragging");
+    rows.forEach(function(r){ if(r !== row) r.classList.add("shifting"); });
+    document.body.classList.add("cat-dragging");
+    moveDrag();
+  }
+  function moveDrag(){
+    var d = D, dy = d.lastY - d.startY;
+    d.row.style.transform = "translateY(" + dy + "px) scale(1.02)";
+    var c = center(d, d.from) + dy, to = d.from, i;
+    for(i = d.from + 1; i < d.rows.length; i++) if(c > center(d, i)) to = i;
+    for(i = d.from - 1; i >= 0; i--) if(c < center(d, i)) to = i;
+    if(to === d.to) return;
+    d.to = to;
+    var shift = d.rects[d.from].height + (d.rows.length > 1 ? Math.abs(d.rects[1].top - d.rects[0].bottom) : 8);
+    d.rows.forEach(function(r, j){
+      if(j === d.from) return;
+      var y = (d.from < to && j > d.from && j <= to) ? -shift
+            : (to < d.from && j >= to && j < d.from) ? shift : 0;
+      r.style.transform = y ? "translateY(" + y + "px)" : "";
+    });
+  }
+  function endDrag(cancelled){
+    var d = D; D = null;
+    document.body.classList.remove("cat-dragging");
+    setTimeout(function(){ swallowClick = false; }, 0);
+    var to = cancelled ? d.from : d.to;
+    var off = to > d.from ? d.rects[to].bottom - d.rects[d.from].bottom
+            : to < d.from ? d.rects[to].top - d.rects[d.from].top : 0;
+    d.row.classList.add("settling");
+    d.row.style.transform = "translateY(" + off + "px)";
+    if(cancelled) d.rows.forEach(function(r){ if(r !== d.row) r.style.transform = ""; });
+    setTimeout(function(){
+      if(to !== d.from){
+        // Move it in the full list (archived categories keep their places).
+        var movedId = d.row.getAttribute("data-cid"), refId = d.rows[to].getAttribute("data-cid");
+        var arr = state.categories.slice(), mi = -1, i;
+        for(i = 0; i < arr.length; i++) if(arr[i].id === movedId){ mi = i; break; }
+        if(mi >= 0){
+          var moved = arr.splice(mi, 1)[0], ri = -1;
+          for(i = 0; i < arr.length; i++) if(arr[i].id === refId){ ri = i; break; }
+          if(ri >= 0){ arr.splice(to > d.from ? ri + 1 : ri, 0, moved); state.categories = arr; }
+        }
+        save(true); renderAll(); nativeSync();
+      }
+      renderCatList();
+    }, 170);
+  }
+})();
 var openPaletteFor = null;
 var CAT_COLORS = ["#1F6F5C","#2E8B57","#4A7A33","#3F7A8C","#2F6F9A","#43648F","#5B5FC7",
                   "#6B5B95","#8E4585","#B5456B","#C0392B","#9C4B2A","#D4881F","#8A6D1F","#5D6D7E"];
