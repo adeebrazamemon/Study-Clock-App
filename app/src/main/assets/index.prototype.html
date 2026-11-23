@@ -606,6 +606,7 @@
   .dpane.on{visibility:visible}
   /* Optional rows keep their space when they don't apply, so nothing shifts. */
   .field.off,.field-col.off{visibility:hidden}
+  .field.dis{opacity:.45}
 
   .goalwrap{margin-top:18px}
   .goalbar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:var(--line)}
@@ -1184,6 +1185,7 @@
         <option value="waves">Ocean waves</option>
         <option value="wind">Wind and birds</option>
         <option value="fire">Fireplace</option>
+        <option value="library">Library</option>
         <option value="brown">Brown noise</option>
       </select>
     </div>
@@ -1237,8 +1239,11 @@
   <div class="dpane" id="pane-scene">
     <div class="scenegrid" id="scenegrid" role="group" aria-label="Scene"></div>
     <p class="scene-blurb" id="scene-blurb"></p>
-    <div class="field" id="f-scene-drive"><label for="in-scene-drive">Scene follows</label>
-      <select id="in-scene-drive"><option value="goal">Your daily goal</option><option value="time">Time of day</option><option value="still">Nothing: its best moment</option></select>
+    <div class="field" id="f-scene-static"><label for="in-scene-static">Scene</label>
+      <select id="in-scene-static"><option value="dynamic">Dynamic</option><option value="static">Static</option></select>
+    </div>
+    <div class="field" id="f-scene-drive"><label for="in-scene-drive">Moves with</label>
+      <select id="in-scene-drive"><option value="goal">Your daily goal</option><option value="time">Time of day</option></select>
     </div>
     <div class="field" id="f-scene-clock"><label for="in-scene-clock">Full-screen clock</label>
       <select id="in-scene-clock"><option value="minimal">Minimal card</option><option value="regular">Regular clock</option></select>
@@ -2343,7 +2348,7 @@ var state = {
             analogStyle:"ticks", digitStyle:"plain", showTod:true, showTimeLeft:true,
             accent:"ocean", accentColor:"", darkTone:"default",
             showGoal:true, showCycle:true, countdownDate:"", calColor:"",
-            scene:"none", sceneDrive:"goal", sceneMotion:true, sceneClock:"minimal", lockBest:0, celebrate:true,
+            scene:"none", sceneDrive:"goal", sceneStatic:false, sceneMotion:true, sceneClock:"minimal", lockBest:0, celebrate:true,
             ambient:"off", ambientVol:50, ambientFocus:true},
   categories:[],    // new users pick their own -- prompted before the first focus block
   activeCat:null,
@@ -3676,7 +3681,8 @@ var sceneInst = null, sceneId = "none";
 var sceneShown = null,     // the progress the scene is showing now
     sceneDrop = null,      // {from, to} while winding back
     scenePreview = null,   // the Settings preview slider overrides while dragged
-    sceneTimer = 0, sceneLast = 0, glassKey = "", glassSet = {};
+    sceneTimer = 0, sceneLast = 0, glassKey = "", glassSet = {},
+    sceneFadeNext = false;   // the next step dissolves in (a setting just changed)
 var SCENE_BACK_MS = 3*60*1000;
 var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 // "Preview the day" (Settings > Scenes) is a tool for checking scenes while
@@ -3684,9 +3690,9 @@ var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: 
 var DEV_PREVIEW = ["localhost", "127.0.0.1", "[::1]"].indexOf(location.hostname) >= 0;
 function scenesReady(){ return !!(window.Scenes && Scenes.mount); }
 function sceneTimeMode(){ return state.settings.sceneDrive === "time" && scenesReady() && Scenes.supportsTime(sceneId); }
-// "Nothing": the scene holds its best-looking moment all day (a downpour, a
-// pink sky just before sunset, the garden in full bloom), still animated.
-function sceneStillMode(){ return state.settings.sceneDrive === "still" && scenesReady(); }
+// Static: the scene holds its best-looking moment all day (a downpour, a pink
+// sky just before sunset, the garden in full bloom), still animated.
+function sceneStillMode(){ return (state.settings.sceneStatic === true || state.settings.sceneDrive === "still") && scenesReady(); }
 function sceneTarget(){
   if(sceneStillMode()) return Scenes.stillPoint(sceneId);
   if(sceneTimeMode()) return Scenes.timeOfDay(new Date());
@@ -3700,7 +3706,7 @@ function syncScene(){
   if(!scenesReady() || !Scenes.has(want)) want = "none";
   if(want !== sceneId){
     dropScenes();
-    sceneId = want; sceneShown = null; sceneDrop = null; glassKey = "";
+    sceneId = want; sceneShown = null; sceneDrop = null; glassKey = ""; sceneFadeNext = false;
     // The class goes on first: the backdrop has to be visible (sized) when the scene measures it.
     document.body.classList.toggle("scene", want !== "none");
     if(want !== "none") sceneInst = Scenes.mount(document.getElementById("scenebg"), want);
@@ -3731,7 +3737,8 @@ function stepScene(){
   // dissolves straight into the new moment. Gliding there would repaint the
   // whole scene several times a second for half a minute, which stutters on
   // a tablet; a reset still winds back slowly (above).
-  var big = !sceneDrop && scenePreview === null && t - sceneShown > 0.04 && !sceneTimeMode();
+  var big = sceneFadeNext || (!sceneDrop && scenePreview === null && t - sceneShown > 0.04 && !sceneTimeMode());
+  sceneFadeNext = false;
   if(big) sceneShown = t;
   var moving = sceneDrop || Math.abs(t - sceneShown) > 0.002;
   var su = {
@@ -3865,16 +3872,20 @@ function renderSceneGallery(){
   document.getElementById("scene-blurb").textContent = blurb;
   var has = cur !== "none";
   // Rows that don't apply stay in place, invisible ("off"), so the window doesn't resize.
-  document.getElementById("f-scene-drive").classList.toggle("off", !(has && scenesReady()));
-  // Time of day is a Valley thing; elsewhere that choice isn't offered (and a
-  // synced "time" falls back to the goal, which is what the scene then shows).
+  var stat = state.settings.sceneStatic === true || state.settings.sceneDrive === "still";
+  document.getElementById("f-scene-static").classList.toggle("off", !(has && scenesReady()));
+  document.getElementById("in-scene-static").value = stat ? "static" : "dynamic";
+  // A dynamic scene moves with your goal, or (Valley only) with the time of
+  // day; other scenes only follow the goal, so the choice isn't shown there.
   var timeOk = has && scenesReady() && Scenes.supportsTime(cur);
-  document.querySelector("#in-scene-drive option[value=time]").hidden = !timeOk;
-  document.querySelector("#in-scene-drive option[value=time]").disabled = !timeOk;
+  // Shown greyed out (not hidden) when it doesn't apply, so there's no gap.
+  document.getElementById("f-scene-drive").classList.toggle("off", !(has && scenesReady()));
+  document.getElementById("f-scene-drive").classList.toggle("dis", !timeOk || stat);
+  document.getElementById("in-scene-drive").disabled = !timeOk || stat;
   document.getElementById("f-scene-preview").hidden = !DEV_PREVIEW;   // dev-only: never takes space in the app
   document.getElementById("f-scene-preview").classList.toggle("off", !has);
   var drive = state.settings.sceneDrive || "goal";
-  document.getElementById("in-scene-drive").value = (drive === "time" && !timeOk) ? "goal" : drive;
+  document.getElementById("in-scene-drive").value = (drive === "time" && timeOk) ? "time" : "goal";
   document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
   document.getElementById("in-blur").value = blurPref();
   document.getElementById("in-scene-clock").value = state.settings.sceneClock === "regular" ? "regular" : "minimal";
@@ -4147,13 +4158,16 @@ function confetti(){
 }
 
 /* ---------- ambient sound ----------
-   Synthesised in the browser, no audio files: each sound is a few seconds of
-   generated noise (with drops, crackles, swells or birdsong baked in) played
-   on a loop, so playing it costs almost nothing. "Match the scene" picks the
-   one that fits, and for Rain follows the scene's own weather. By default it
-   plays only while a focus block or lock-in is running, fading in and out. */
+   Synthesised in the browser, no audio files: each sound is a few layers of
+   generated audio (rain drops, crackles, gusts, birdsong, page turns...) baked
+   once into short loops, so playing it costs almost nothing. Loops are made
+   at 22 kHz (plenty for these sounds, and half the memory and build time).
+   Each sound plays through its own fader, so switching fades the old one out
+   in a moment while the new one fades in: no pile-up, no wait. "Match the
+   scene" picks the one that fits, and for Rain follows the scene's weather.
+   By default it plays only while a focus block or lock-in is running. */
 var Ambient = (function(){
-  var ctx = null, master = null, layers = null, curId = "off", bufs = {};
+  var ctx = null, master = null, cur = null, curId = "off", bufs = {}, RATE = 22050;
   function context(){
     if(!ctx){
       ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -4163,102 +4177,260 @@ var Ambient = (function(){
     if(ctx.state === "suspended") ctx.resume();
     return ctx;
   }
-  // Seconds of mono noise: "white", "pink" or "brown", with `extra(data, rate)`
-  // drawing anything else into it. Loops cleanly: the end fades into the start.
-  function buffer(name, secs, color, extra){
-    if(bufs[name]) return bufs[name];
-    var rate = ctx.sampleRate, n = Math.floor(secs*rate), b = ctx.createBuffer(1, n, rate), d = b.getChannelData(0);
-    var b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
-    for(var i = 0; i < n; i++){
-      var w = Math.random()*2 - 1;
-      if(color === "white") d[i] = w*0.5;
-      else if(color === "pink"){   // Paul Kellet's pink filter
-        b0 = .99886*b0 + w*.0555179; b1 = .99332*b1 + w*.0750759; b2 = .969*b2 + w*.153852;
-        b3 = .8665*b3 + w*.3104856; b4 = .55*b4 + w*.5329522; b5 = -.7616*b5 - w*.016898;
-        d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w*.5362)*.11; b6 = w*.115926;
-      }else{ last = (last + .02*w)/1.02; d[i] = last*3.5; }   // brown
-    }
-    if(extra) extra(d, rate);
-    // Crossfade the last half second into the first, so the loop has no seam.
-    var f = Math.floor(.5*rate);
-    for(i = 0; i < f; i++){ var t = i/f; d[i] = d[i]*t + d[n - f + i]*(1 - t); }
-    b = trimTail(b, f);
-    return (bufs[name] = b);
+  function hold(p, now){
+    if(p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(now);
+    else { var v = p.value; p.cancelScheduledValues(now); p.setValueAtTime(v, now); }
   }
-  function trimTail(b, f){
-    var n = b.length - f, out = ctx.createBuffer(1, n, b.sampleRate);
-    out.getChannelData(0).set(b.getChannelData(0).subarray(0, n));
+
+  /* ----- building blocks (all on plain arrays at RATE) ----- */
+  var rnd = function(a, b){ return a + Math.random()*(b - a); };
+  // A smooth random curve between lo and hi, a new point every ~period seconds.
+  function slowEnv(n, period, lo, hi){
+    var out = new Float32Array(n), i = 0, a = rnd(lo, hi);
+    while(i < n){
+      var L = Math.max(1, Math.floor(RATE*period*rnd(.6, 1.4))), b = rnd(lo, hi);
+      for(var j = 0; j < L && i < n; j++, i++){ var t = (1 - Math.cos(Math.PI*j/L))/2; out[i] = a + (b - a)*t; }
+      a = b;
+    }
     return out;
   }
-  function loop(buf, gain, filt){
-    var s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
-    var g = ctx.createGain(); g.gain.value = gain;
-    var node = s;
-    (filt || []).forEach(function(f){ var bq = ctx.createBiquadFilter(); bq.type = f[0]; bq.frequency.value = f[1]; if(f[2]) bq.Q.value = f[2]; node.connect(bq); node = bq; });
-    node.connect(g); g.connect(master);
-    s.start(0, Math.random()*buf.duration);
-    return {src:s, gain:g};
+  // A small biquad (RBJ cookbook) for shaping one-off events.
+  function biquad(type, f, q){
+    var w = 2*Math.PI*Math.min(f, RATE*.45)/RATE, cs = Math.cos(w), al = Math.sin(w)/(2*(q || .707)), b0, b1, b2;
+    if(type === "lp"){ b0 = (1 - cs)/2; b1 = 1 - cs; b2 = b0; }
+    else if(type === "hp"){ b0 = (1 + cs)/2; b1 = -(1 + cs); b2 = b0; }
+    else { b0 = al; b1 = 0; b2 = -al; }
+    var a0 = 1 + al, a1 = -2*cs/a0, a2 = (1 - al)/a0, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    b0 /= a0; b1 /= a0; b2 /= a0;
+    return function(x){ var y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; };
   }
-  // Short bursts baked into a buffer: rain drops, fire crackles.
-  function bursts(perSec, len, amp){
-    return function(d, rate){
-      var n = d.length, count = Math.floor(n/rate*perSec);
-      for(var k = 0; k < count; k++){
-        var at = Math.floor(Math.random()*n), L = Math.floor(rate*len*(.4 + Math.random())), a = amp*(.2 + Math.random()*.8);
-        for(var j = 0; j < L && at + j < n; j++) d[at + j] += (Math.random()*2 - 1)*a*Math.exp(-j/(L*.25));
+  // Add v to channel data at i, placed in the stereo field (pan 0 left .. 1 right).
+  // (gains(pan) once per event, then put() per sample: no trig per sample.)
+  function gains(ch, pan){ return ch.length === 1 ? [1, 0] : [Math.cos(pan*Math.PI/2)*1.41, Math.sin(pan*Math.PI/2)*1.41]; }
+  function put(ch, i, v, g){ ch[0][i] += v*g[0]; if(ch.length > 1) ch[1][i] += v*g[1]; }
+  // A decaying tone: f0 gliding to f1, optional vibrato; dec = decay time (s).
+  function tone(ch, at, secs, f0, f1, amp, pan, o){
+    o = o || {};
+    var n = ch[0].length, L = Math.floor(secs*RATE), ph = Math.random()*6.28, att = Math.max(1, Math.floor((o.att || .1)*L));
+    var h2 = (o.h2 || 0) && Math.max(f0, f1)*2 < RATE*.45 ? o.h2 : 0, g = gains(ch, pan);
+    for(var j = 0; j < L && at + j < n; j++){
+      var x = j/L, f = f0 + (f1 - f0)*(o.curve ? Math.pow(x, o.curve) : x);
+      if(o.vib) f *= 1 + o.vib*Math.sin(2*Math.PI*(o.vibHz || 7)*j/RATE);
+      ph += 2*Math.PI*f/RATE;
+      var e = o.dec ? Math.exp(-j/(o.dec*RATE)) : (j < att ? j/att : Math.pow(1 - (j - att)/(L - att), 1.4));
+      if(o.dec && j < att) e *= j/att;
+      put(ch, at + j, (Math.sin(ph) + h2*Math.sin(2*ph))*amp*e, g);
+    }
+  }
+  // A burst of filtered noise with an envelope function env(x) over 0..1.
+  function hiss(ch, at, secs, filt, amp, pan, env){
+    var n = ch[0].length, L = Math.floor(secs*RATE), fs = filt.map(function(f){ return biquad(f[0], f[1], f[2]); }), g = gains(ch, pan);
+    for(var j = 0; j < L && at + j < n; j++){
+      var v = Math.random()*2 - 1;
+      for(var k = 0; k < fs.length; k++) v = fs[k](v);
+      put(ch, at + j, v*amp*env(j/L), g);
+    }
+  }
+  // A click: a sharp impulse with a short ring, the heart of a crackle or a drop.
+  function click(ch, at, f, ring, amp, pan){
+    var n = ch[0].length, L = Math.floor(ring*RATE*5) + 4, w = 2*Math.PI*f/RATE, ph = Math.random()*6.28, g = gains(ch, pan), k = Math.exp(-1/(ring*RATE)), e = 1;
+    for(var j = 0; j < L && at + j < n; j++){
+      var v = Math.sin(ph + w*j)*e + (j < 3 ? (Math.random()*2 - 1)*(1 - j/3) : 0);
+      e *= k;
+      put(ch, at + j, v*amp, g);
+    }
+  }
+
+  // Loops: `secs` long, mono or stereo, filled with `color` noise ("none" for
+  // silence) and then `extra(ch)`. The last half second crossfades into the
+  // first, so the loop has no seam.
+  function buffer(name, secs, color, extra, stereo){
+    if(bufs[name]) return bufs[name];
+    var n = Math.floor(secs*RATE), ch = [new Float32Array(n)];
+    if(stereo) ch.push(new Float32Array(n));
+    ch.forEach(function(d){
+      if(color === "none") return;
+      var b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
+      for(var i = 0; i < n; i++){
+        var w = Math.random()*2 - 1;
+        if(color === "white") d[i] = w*.5;
+        else if(color === "pink"){   // Paul Kellet's pink filter
+          b0 = .99886*b0 + w*.0555179; b1 = .99332*b1 + w*.0750759; b2 = .969*b2 + w*.153852;
+          b3 = .8665*b3 + w*.3104856; b4 = .55*b4 + w*.5329522; b5 = -.7616*b5 - w*.016898;
+          d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w*.5362)*.11; b6 = w*.115926;
+        }else{ last = (last + .02*w)/1.02; d[i] = last*3.5; }   // brown
       }
+    });
+    if(extra) extra(ch, n);
+    var f = Math.floor(.5*RATE), out = new AudioBuffer({numberOfChannels:ch.length, length:n - f, sampleRate:RATE});
+    ch.forEach(function(d, c){
+      for(var i = 0; i < f; i++){ var t = i/f; d[i] = d[i]*t + d[n - f + i]*(1 - t); }
+      out.copyToChannel(d.subarray(0, n - f), c);
+    });
+    return (bufs[name] = out);
+  }
+  // Multiply a loop by a slow random swell (gusts, a fire's flicker).
+  function swell(period, lo, hi){
+    return function(ch, n){ var e = slowEnv(n, period, lo, hi); ch.forEach(function(d){ for(var i = 0; i < n; i++) d[i] *= e[i]; }); };
+  }
+  // Something that happens at random, `perSec` times a second on average.
+  function events(n, perSec, fn){ var count = Math.round(n/RATE*perSec); for(var k = 0; k < count; k++) fn(Math.floor(Math.random()*n)); }
+
+  /* ----- the sounds ----- */
+  // Rain: a soft roar, a high sizzle, thousands of tiny drops, and now and
+  // then a fat drip landing close by.
+  function rainDrops(perSec, big){
+    return function(ch, n){
+      events(n, perSec, function(at){
+        var f = 1400*Math.pow(4, Math.random()), a = (big ? .09 : .05)*Math.pow(Math.random(), 2.2) + .004;
+        click(ch, at, f, rnd(.0006, .002), a, rnd(.1, .9));
+      });
     };
   }
+  function nearDrips(ch, n){
+    events(n, .9, function(at){   // a water drop: a bright "plink" whose pitch rises as it rings
+      var f = rnd(900, 2200);
+      tone(ch, at, rnd(.04, .09), f, f*rnd(1.2, 1.5), rnd(.035, .08), rnd(.2, .8), {dec:rnd(.012, .025), att:.02, curve:.6});
+    });
+  }
+  // Birdsong on silence: trills, whistled phrases, quick chirps, each bird
+  // somewhere of its own in the stereo field and at its own distance.
+  function birdsong(ch, n){
+    var t = Math.floor(rnd(.5, 2)*RATE);
+    while(t < n - RATE*3){
+      var pan = rnd(.1, .9), dist = rnd(.35, 1), kind = Math.random(), s = t, i, f;
+      if(kind < .3){   // trill
+        var notes = 6 + Math.floor(Math.random()*9), fc = rnd(3200, 5000), dn = rnd(.035, .06);
+        for(i = 0; i < notes; i++){ f = fc*rnd(.97, 1.03); tone(ch, s, dn, f*1.08, f*.82, .06*dist, pan, {h2:.12}); s += Math.floor((dn + rnd(.015, .03))*RATE); }
+      }else if(kind < .6){   // a whistled phrase
+        var k = 2 + Math.floor(Math.random()*3), base = rnd(2200, 3400);
+        for(i = 0; i < k; i++){ f = base*rnd(.8, 1.25); var d = rnd(.12, .28);
+          tone(ch, s, d, f, f*rnd(.75, 1.3), .055*dist, pan, {vib:.02, vibHz:rnd(6, 9), h2:.1, att:.15}); s += Math.floor((d + rnd(.05, .14))*RATE); }
+      }else if(kind < .85){   // a few "tsip" chirps
+        var c = 2 + Math.floor(Math.random()*3);
+        for(i = 0; i < c; i++){ f = rnd(5200, 6400); tone(ch, s, rnd(.03, .045), f, f*.72, .04*dist, pan, {att:.08}); s += Math.floor(rnd(.09, .16)*RATE); }
+      }else{   // a robin-like warble: quick notes jumping in pitch
+        var m = 4 + Math.floor(Math.random()*4);
+        for(i = 0; i < m; i++){ f = rnd(2000, 4200); var d2 = rnd(.07, .14);
+          tone(ch, s, d2, f, f*rnd(.7, 1.4), .05*dist, pan, {vib:.04, vibHz:rnd(18, 30), h2:.15}); s += Math.floor((d2 + rnd(.02, .06))*RATE); }
+      }
+      t = s + Math.floor(rnd(1.8, 5.5)*RATE);
+    }
+  }
+  // Fire: clustered crackles over a flickering roar, and the odd pop.
+  function crackles(ch, n){
+    var hit = function(at, amp){ click(ch, at, rnd(1800, 7000), rnd(.0003, .0012), amp, rnd(.3, .7)); };
+    events(n, 2.5, function(at){ hit(at, rnd(.05, .25)); });
+    events(n, .6, function(at){   // a cluster as a pocket of sap goes
+      var k = 3 + Math.floor(Math.random()*8);
+      for(var i = 0; i < k; i++){ hit(at, rnd(.04, .22)); at += Math.floor(rnd(.008, .07)*RATE); }
+    });
+    events(n, .18, function(at){   // a pop: a soft thump and a sharp crack
+      tone(ch, at, .05, rnd(90, 160), 70, rnd(.12, .22), .5, {dec:.018, att:.02});
+      hit(at, rnd(.3, .5));
+    });
+  }
+  // A quiet library: page turns, a pencil, distant steps, a laptop, a book set down.
+  function libraryLife(ch, n){
+    var at;
+    events(n, 1/9, function(at0){   // a page turn: a papery swish, then it settles
+      var d = rnd(.35, .7), pan = rnd(.2, .8), flutter = slowEnv(Math.floor(d*RATE) + 2, .02, .35, 1), i0 = 0;
+      hiss(ch, at0, d, [["bp", rnd(2800, 4200), .7], ["hp", 900]], .16, pan, function(x){ return (x < .15 ? x/.15 : Math.pow(1 - (x - .15)/.85, 1.6))*flutter[i0++]; });
+      hiss(ch, at0 + Math.floor(d*RATE*.9), .07, [["lp", 500]], .14, pan, function(x){ return Math.pow(1 - x, 2); });
+    });
+    events(n, 1/18, function(at0){   // writing: a run of pencil strokes
+      var end = at0 + Math.floor(rnd(1.5, 4)*RATE), pan = rnd(.3, .7);
+      for(at = at0; at < end; ){
+        var d = rnd(.06, .18), fl = slowEnv(Math.floor(d*RATE) + 2, .004, .3, 1), i1 = 0;
+        hiss(ch, at, d, [["bp", rnd(3500, 5000), .8]], rnd(.035, .055), pan, function(x){ return Math.sin(Math.PI*x)*fl[i1++]; });
+        at += Math.floor((d + rnd(.03, .12))*RATE);
+      }
+    });
+    events(n, 1/30, function(at0){   // someone walks past, far off
+      var k = 5 + Math.floor(Math.random()*5), p0 = rnd(.1, .3), p1 = 1 - p0;
+      if(Math.random() < .5){ var sw = p0; p0 = p1; p1 = sw; }
+      for(var i = 0; i < k; i++){
+        var x = i/(k - 1), a = .1*Math.sin(Math.PI*(.15 + .7*x)), s = at0 + Math.floor(i*rnd(.5, .58)*RATE), pan = p0 + (p1 - p0)*x;
+        tone(ch, s, .06, rnd(75, 110), 60, a, pan, {dec:.022, att:.05});
+        hiss(ch, s, .03, [["lp", 900]], a*.5, pan, function(x2){ return Math.pow(1 - x2, 3); });
+      }
+    });
+    events(n, 1/25, function(at0){   // a laptop, typing in bursts
+      var end = at0 + Math.floor(rnd(2, 5)*RATE), pan = rnd(.15, .85);
+      for(at = at0; at < end; at += Math.floor(rnd(.08, .22)*RATE)){
+        var space = Math.random() < .12;
+        click(ch, at, space ? rnd(1100, 1400) : rnd(2200, 3200), space ? .0025 : .0012, space ? .05 : rnd(.025, .04), pan);
+      }
+    });
+    events(n, 1/40, function(at0){   // a book set down on a table
+      var pan = rnd(.2, .8);
+      tone(ch, at0, .09, rnd(95, 130), 80, .16, pan, {dec:.03, att:.01});
+      tone(ch, at0, .04, rnd(320, 420), 300, .05, pan, {dec:.012, att:.01});
+    });
+  }
+
+  // Each layer: a looping buffer through a gain and filters. A filter may sway
+  // with a slow LFO ([type, freq, Q, lfoHz, depth]), e.g. wind rising and falling.
+  function loop(c, bus, buf, gain, filt){
+    var s = c.createBufferSource(); s.buffer = buf; s.loop = true;
+    var g = c.createGain(); g.gain.value = gain;
+    var node = s, oscs = [];
+    (filt || []).forEach(function(f){
+      var bq = c.createBiquadFilter(); bq.type = f[0]; bq.frequency.value = f[1]; if(f[2]) bq.Q.value = f[2];
+      if(f[3]){
+        var o = c.createOscillator(), og = c.createGain();
+        o.frequency.value = f[3]; og.gain.value = f[4]; o.connect(og); og.connect(bq.frequency);
+        o.start(0); oscs.push(o);
+      }
+      node.connect(bq); node = bq;
+    });
+    node.connect(g); g.connect(bus);
+    s.start(0, Math.random()*buf.duration);
+    return {gain:g, stop:function(when){ try{ s.stop(when); }catch(e){} oscs.forEach(function(o){ try{ o.stop(when); }catch(e){} }); }};
+  }
+  var BUILD = {
+    brown:function(c, b){ return [loop(c, b, buffer("brown", 9, "brown"), .9, [["lowpass", 700]])]; },
+    rain:function(c, b){ return [
+      loop(c, b, buffer("rainroar", 11, "pink", null, true), .5, [["highpass", 180], ["lowpass", 2600]]),
+      loop(c, b, buffer("rainsizzle", 9, "white", null, true), .1, [["highpass", 4200]]),
+      loop(c, b, buffer("raindrops", 8, "none", rainDrops(700, false), true), .9),
+      loop(c, b, buffer("rainheavy", 7, "none", rainDrops(1800, true), true), 0),
+      loop(c, b, buffer("raindrips", 13, "none", nearDrips, true), .6)
+    ]; },
+    waves:function(c, b){ return [
+      loop(c, b, buffer("waves", 31, "brown", function(ch, n){ wavesSwell(ch, n); }), .9, [["lowpass", 900]]),
+      loop(c, b, buffer("foam", 23, "pink", function(ch, n){ wavesSwell(ch, n); }), .22, [["highpass", 1200], ["lowpass", 5000]])
+    ]; },
+    wind:function(c, b){ return [
+      loop(c, b, buffer("windbody", 17, "pink", swell(3.5, .12, 1), true), .95, [["lowpass", 700, .7, .07, 260], ["highpass", 90]]),
+      loop(c, b, buffer("windwhistle", 13, "pink", swell(2.5, 0, 1)), .12, [["bandpass", 1150, 9, .045, 380]]),
+      loop(c, b, buffer("birds", 37, "none", birdsong, true), 1)
+    ]; },
+    fire:function(c, b){ return [
+      loop(c, b, buffer("fireroar", 11, "brown", swell(.5, .45, 1)), .7, [["lowpass", 320]]),
+      loop(c, b, buffer("firebreath", 9, "pink", swell(.35, .1, 1)), .06, [["bandpass", 1600, .8]]),
+      loop(c, b, buffer("crackle", 17, "none", crackles), .9, [["highpass", 60]])
+    ]; },
+    library:function(c, b){ return [
+      loop(c, b, buffer("roomtone", 11, "brown", null, true), .35, [["lowpass", 200]]),
+      loop(c, b, buffer("aircon", 9, "pink", null, true), .035, [["bandpass", 420, .5]]),
+      loop(c, b, buffer("library", 53, "none", libraryLife, true), 1)
+    ]; }
+  };
   // Waves: slow swells, each with its own length, baked over the noise.
-  function swells(d, rate){
-    var n = d.length, t = 0;
+  function wavesSwell(ch, n){
+    var t = 0, d = ch[0];
     while(t < n){
-      var L = Math.floor(rate*(6 + Math.random()*5)), peak = .45 + Math.random()*.55;
+      var L = Math.floor(RATE*(6 + Math.random()*5)), peak = .45 + Math.random()*.55;
       for(var j = 0; j < L && t + j < n; j++){ var x = j/L; d[t + j] *= .12 + peak*Math.pow(Math.sin(Math.PI*x), 2)*(1 - .35*x); }
       t += L;
     }
   }
-  // A few songbird phrases: quick rising/falling chirps.
-  function birds(d, rate){
-    var n = d.length;
-    for(var i = 0; i < n; i++) d[i] *= .35;   // wind bed under the birds
-    var phrases = Math.floor(n/rate/4);
-    for(var p = 0; p < phrases; p++){
-      var at = Math.floor(Math.random()*(n - rate)), notes = 2 + Math.floor(Math.random()*4), base = 2600 + Math.random()*1600;
-      for(var q = 0; q < notes; q++){
-        var st = at + Math.floor(q*rate*(.09 + Math.random()*.05)), L = Math.floor(rate*(.05 + Math.random()*.06));
-        var f0 = base*(.85 + Math.random()*.3), f1 = f0*(Math.random() < .5 ? 1.35 : .75), ph = 0;
-        for(var j = 0; j < L && st + j < n; j++){
-          var x = j/L; ph += 2*Math.PI*(f0 + (f1 - f0)*x)/rate;
-          d[st + j] += Math.sin(ph)*.05*Math.sin(Math.PI*x);
-        }
-      }
-    }
-  }
-  var BUILD = {
-    brown:function(){ return [loop(buffer("brown", 9, "brown"), .9, [["lowpass", 700]])]; },
-    rain:function(){ return [
-      loop(buffer("rainbed", 9, "pink"), .55, [["highpass", 350], ["lowpass", 6500]]),
-      loop(buffer("drops", 7, "white", bursts(45, .012, .8)), .35, [["bandpass", 3200, .6]]),
-      loop(buffer("heavy", 8, "white", bursts(160, .01, .7)), .0, [["bandpass", 2400, .5]])
-    ]; },
-    waves:function(){ return [
-      loop(buffer("waves", 31, "brown", swells), .9, [["lowpass", 900]]),
-      loop(buffer("foam", 23, "pink", swells), .22, [["highpass", 1200], ["lowpass", 5000]])
-    ]; },
-    wind:function(){ return [
-      loop(buffer("wind", 13, "pink"), .3, [["bandpass", 520, .6]]),
-      loop(buffer("birds", 29, "white", birds), .7, [["highpass", 1800]])
-    ]; },
-    fire:function(){ return [
-      loop(buffer("fire", 9, "brown"), .75, [["lowpass", 380]]),
-      loop(buffer("crackle", 11, "white", bursts(9, .004, 1)), .55, [["highpass", 1400]])
-    ]; }
-  };
-  function stopLayers(){
-    if(!layers) return;
-    var old = layers; layers = null;
-    setTimeout(function(){ old.forEach(function(l){ try{ l.src.stop(); }catch(e){} }); }, 900);
+  function rainLevel(layers, L, now, tc){
+    layers[0].gain.gain.setTargetAtTime(.08 + .6*L, now, tc);    // clear sky: just the drips
+    layers[1].gain.gain.setTargetAtTime(.02 + .12*L, now, tc);
+    layers[2].gain.gain.setTargetAtTime(.25 + .75*L, now, tc);
+    layers[3].gain.gain.setTargetAtTime(.9*Math.max(0, L - .35)/.65, now, tc);
   }
   return {
     // id: which sound ("off" for none); on: whether it should be audible now;
@@ -4267,28 +4439,51 @@ var Ambient = (function(){
       if(id === "off" && curId === "off") return;
       if(!ctx && !on) return;
       context();
-      var now = ctx.currentTime;
-      if(id !== curId){
-        master.gain.cancelScheduledValues(now);
-        master.gain.setTargetAtTime(0, now, .25);
-        stopLayers();
-        curId = id;
-        if(id !== "off" && BUILD[id]) layers = BUILD[id]();
+      var now = ctx.currentTime, switched = id !== curId;
+      if(switched){
+        if(cur){
+          var old = cur;
+          hold(old.bus.gain, now); old.bus.gain.setTargetAtTime(0, now, .07);
+          old.layers.forEach(function(l){ l.stop(now + .45); });
+          setTimeout(function(){ try{ old.bus.disconnect(); }catch(e){} }, 700);
+        }
+        cur = null; curId = id;
+        if(id !== "off" && BUILD[id]){
+          var bus = ctx.createGain(); bus.gain.value = 0; bus.connect(master);
+          cur = {bus:bus, layers:BUILD[id](ctx, bus)};
+          bus.gain.setTargetAtTime(1, ctx.currentTime, .12);
+        }
       }
-      if(layers && id === "rain"){
-        var L = Math.max(0, Math.min(1, level == null ? .5 : level));
-        layers[0].gain.gain.setTargetAtTime(.05 + .75*L, now, 1.5);   // clear sky = just a few drips
-        layers[1].gain.gain.setTargetAtTime(.12 + .33*L, now, 1.5);
-        layers[2].gain.gain.setTargetAtTime(.5*Math.max(0, L - .35)/.65, now, 1.5);
-      }
-      var target = (on && layers) ? .45*vol*vol : 0;   // squared: a natural-feeling slider
-      master.gain.cancelScheduledValues(now);
-      master.gain.setTargetAtTime(target, now, on ? .8 : .35);
+      if(cur && id === "rain") rainLevel(cur.layers, Math.max(0, Math.min(1, level == null ? .5 : level)), now, switched ? .01 : 1.5);
+      var target = (on && cur) ? .45*vol*vol : 0;   // squared: a natural-feeling slider
+      hold(master.gain, now);
+      master.gain.setTargetAtTime(target, now, on ? (switched ? .1 : .8) : .3);
     },
-    playing:function(){ return curId !== "off" && !!layers; }
+    playing:function(){ return curId !== "off" && !!cur; },
+    // Build a sound's loops ahead of time (idle, after startup), so the first
+    // time it plays it starts at once.
+    warm:function(id){
+      if(!BUILD[id] || !window.OfflineAudioContext) return;
+      try{ var oc = new OfflineAudioContext(1, 1, RATE); BUILD[id](oc, oc.createGain()); }catch(e){}
+    },
+    // Dev tool (local server only): render a sound offline for checking levels.
+    render:function(id, secs){
+      var oc = new OfflineAudioContext(2, Math.floor(secs*44100), 44100), bus = oc.createGain();
+      bus.connect(oc.destination);
+      var ls = BUILD[id](oc, bus);
+      if(id === "rain") rainLevel(ls, 1, 0, .01);
+      return oc.startRendering();
+    }
   };
 })();
-var ambientKey = "";
+var ambientKey = "", ambientPreviewUntil = 0, ambientPreviewTimer = 0;
+// Picking a sound in Settings plays a few seconds of it, even when it would
+// otherwise wait for a focus block, so you hear what you chose.
+function previewAmbient(){
+  ambientPreviewUntil = Date.now() + 6000;
+  clearTimeout(ambientPreviewTimer);
+  ambientPreviewTimer = setTimeout(function(){ ambientKey = ""; syncAmbient(); }, 6100);
+}
 function ambientChoice(){
   var a = state.settings.ambient || "off";
   if(a !== "scene") return a;
@@ -4299,7 +4494,7 @@ function ambientChoice(){
 function syncAmbient(){
   if(!Ambient) return;   // not set up yet (very early in startup)
   var id = ambientChoice();
-  var on = id !== "off" && (state.settings.ambientFocus === false || (running && focusLike(mode)));
+  var on = id !== "off" && (state.settings.ambientFocus === false || (running && focusLike(mode)) || Date.now() < ambientPreviewUntil);
   var vol = Math.max(0, Math.min(1, (+state.settings.ambientVol || 50)/100));
   var level = null;
   if(id === "rain" && state.settings.ambient === "scene" && sceneId === "rain"){
@@ -4320,6 +4515,8 @@ function syncAmbientInputs(){
   document.getElementById("f-amb-vol").classList.toggle("off", a === "off");
   document.getElementById("f-amb-focus").classList.toggle("off", a === "off");
 }
+if(DEV_PREVIEW) window.__ambient = Ambient;   // local dev server only: level checks
+setTimeout(function(){ Ambient.warm(ambientChoice()); }, 2500);
 // Browsers only allow sound after you interact; pick up then if it should be playing.
 document.addEventListener("pointerdown", function(){ ambientKey = ""; syncAmbient(); }, {passive:true});
 
@@ -5121,7 +5318,12 @@ document.getElementById("scenebtn").addEventListener("click", function(){
 });
 document.getElementById("in-scene-drive").addEventListener("change", function(){
   state.settings.sceneDrive = document.getElementById("in-scene-drive").value;
-  save(true); sceneShown = null; stepScene(); renderSceneGallery();
+  save(true); sceneShown = null; sceneFadeNext = true; stepScene(); renderSceneGallery();
+});
+document.getElementById("in-scene-static").addEventListener("change", function(){
+  state.settings.sceneStatic = document.getElementById("in-scene-static").value === "static";
+  if(state.settings.sceneDrive === "still") state.settings.sceneDrive = "goal";   // a test build's value
+  save(true); sceneShown = null; sceneFadeNext = true; stepScene(); renderSceneGallery();
 });
 document.getElementById("in-scene-clock").addEventListener("change", function(){
   state.settings.sceneClock = document.getElementById("in-scene-clock").value;
@@ -5132,6 +5334,7 @@ document.getElementById("in-scene-clock").addEventListener("change", function(){
     state.settings.ambient = document.getElementById("in-ambient").value;
     state.settings.ambientVol = +document.getElementById("in-ambient-vol").value;
     state.settings.ambientFocus = document.getElementById("in-ambient-focus").checked;
+    if(id !== "in-ambient-focus") previewAmbient();
     save(true); syncAmbientInputs(); ambientKey = ""; syncAmbient();
   });
 });
