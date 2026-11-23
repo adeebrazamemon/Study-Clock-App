@@ -11,6 +11,24 @@
 <meta name="apple-mobile-web-app-title" content="Study Clock">
 <link rel="icon" href="favicon-64.png" sizes="64x64">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>
+/* Google Analytics (GA4), on the published website only -- never in the Android
+   app (it loads this page from the phone itself) or a local preview. Loaded in
+   the background so it can't hold up the page. Page views only: no study data
+   is ever sent, and Google's ad signals/personalisation are off. */
+(function(){
+  if(location.hostname !== "adeebrazamemon.github.io") return;
+  var ID = "G-DHM210HK30";
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function(){ window.dataLayer.push(arguments); };
+  window.gtag("js", new Date());
+  window.gtag("config", ID, { allow_google_signals: false, allow_ad_personalization_signals: false });
+  var s = document.createElement("script");
+  s.async = true;
+  s.src = "https://www.googletagmanager.com/gtag/js?id=" + ID;
+  document.head.appendChild(s);
+})();
+</script>
 <style>
   /* ---------- theme tokens ---------- */
   :root{
