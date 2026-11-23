@@ -547,8 +547,10 @@
   .catrow.settling{transition:transform .16s ease-out !important}
   body.cat-dragging, body.cat-dragging *{user-select:none;-webkit-user-select:none;cursor:grabbing !important}
   .hint{color:var(--muted);font-size:13px;margin:0 0 13px}
-  .footer{margin-top:22px;display:flex;gap:14px;row-gap:9px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
-  .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:0}
+  .footer{margin-top:22px;display:flex;gap:14px;row-gap:9px;flex-wrap:wrap;align-items:center;justify-content:center;
+    text-align:center;color:var(--muted);font-size:13px;margin-inline:auto;justify-self:center}
+  .footer button{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;padding:0}
+  .footer #savenote:empty{display:none}
   .footer button:hover{color:var(--ink)}
   /* Full screen + analog/digital: small icon buttons in the clock card's
      top-right corner (every layout). The card is the size container "clock". */
@@ -583,7 +585,23 @@
   .dtabs button{flex:1;background:none;border:1px solid var(--line);border-radius:999px;
     padding:7px 10px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
   .dtabs button[aria-selected="true"]{background:var(--focus-soft);border-color:var(--focus);color:var(--focus-text);font-weight:600}
-  .dpanes{display:grid}
+  /* The window never outgrows the screen: title, tabs and Done stay put, and
+     only the tab contents scroll, and only on a screen too short for them
+     (a tablet held sideways). */
+  #dlg-settings[open]{display:flex;flex-direction:column;max-height:calc(100dvh - 24px);overflow:hidden}
+  #dlg-settings > h2,#dlg-settings > .dtabs,#dlg-settings > .dialog-actions{flex:none}
+  .dpanes{display:grid;flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    margin:0 -6px;padding:0 6px}
+  .appinfo{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+  .appinfo .hint{margin:0 0 4px}
+  /* Short screens: tighter rows so most tabs fit without scrolling at all. */
+  @media (max-height:700px){
+    #dlg-settings{padding:16px 20px}
+    #dlg-settings h2{margin-bottom:10px}
+    #dlg-settings .dtabs{margin:-2px 0 12px}
+    #dlg-settings .field{margin-bottom:7px}
+    #dlg-settings .dialog-actions{margin-top:12px}
+  }
   .dpane{grid-area:1/1;visibility:hidden;min-width:0}
   .dpane.on{visibility:visible}
   /* Optional rows keep their space when they don't apply, so nothing shifts. */
@@ -938,7 +956,10 @@
   body.scene.fs.sc-min .controls button.primary{background:rgba(255,255,255,.22);font-weight:600}
 
   /* Scene picker (Settings > Scenes). */
-  .scenegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:10px;margin-bottom:12px}
+  /* One row of four, so the Scenes tab is no taller than the others; a narrow
+     phone gets two rows of bigger thumbnails (it has the height to spare). */
+  .scenegrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+  @media (max-width:430px){ .scenegrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
   .scenecard{display:flex;flex-direction:column;gap:6px;padding:0;background:none;border:none;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
   .scthumb{display:block;position:relative;aspect-ratio:16/10;border-radius:10px;overflow:hidden;border:1px solid var(--line);
     background:linear-gradient(160deg,var(--bg),var(--surface))}
@@ -948,7 +969,7 @@
   .scenecard[aria-pressed="true"] .nm{color:var(--focus-text);font-weight:600}
   .scenecard:focus-visible{outline:none}
   .scenecard:focus-visible .scthumb{outline:2.5px solid var(--ink);outline-offset:2px}
-  .scene-blurb{color:var(--muted);font-size:13px;margin:0 0 14px;min-height:4.5em}
+  .scene-blurb{color:var(--muted);font-size:13px;margin:0 0 12px;min-height:3em}
   .field-col input[type=range]{width:100%;accent-color:var(--focus)}
 
   /* Daily goal reached: a small card and a burst of confetti (see celebrateGoal). */
@@ -1225,14 +1246,15 @@
 
   <div class="dpane" id="pane-sync">
     <div id="sync-box"></div>
+    <!-- A quick, no-guessing way to confirm a sideloaded APK actually
+         updated -- bump this alongside build.gradle's versionName. -->
+    <div class="appinfo">
+      <p class="hint" id="appversion">App version 4.7.6</p>
+      <a class="linklike" id="dl-apk"
+         href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
+    </div>
   </div>
   </div>
-
-  <!-- A quick, no-guessing way to confirm a sideloaded APK actually
-       updated -- bump this alongside build.gradle's versionName. -->
-  <p class="hint" id="appversion" style="margin:14px 0 2px">App version 4.7.6</p>
-  <a class="linklike" id="dl-apk"
-     href="https://github.com/adeebrazamemon/Study-Clock-App/releases/latest/download/app-debug.apk">Download the Android app (APK)</a>
 
   <div class="dialog-actions">
     <button class="primary" id="set-save">Done</button>
@@ -2296,6 +2318,42 @@ var DEVICE = (function(){
    sum) -- copies never add up twice. */
 var BASE = "base";
 
+/* ---------- one clock for every device ----------
+   Device clocks drift: a tablet can easily be 10 seconds off a PC. Sync
+   compares times across devices ("which change is newer", "when does the
+   other device's block end"), so each device measures how far its own clock
+   is from the server's and corrects for it. Every push carries the server's
+   write time; when our own write comes back we know when we sent it and when
+   we saw it, so the server's time sits in the middle of that round trip.
+   The fastest round trip is the most accurate sample, so it's kept (and
+   refreshed hourly in case the clock was changed). */
+var CLOCK_KEY = "studyClock.v1.clock";
+var clockOff = 0, clockRtt = Infinity, clockAt = 0, clockSent = 0;
+(function(){
+  try{
+    var c = JSON.parse(localStorage.getItem(CLOCK_KEY) || "null");
+    if(c && isFinite(c.off) && Math.abs(c.off) < 864e5){ clockOff = c.off; clockRtt = c.rtt; clockAt = c.at; }
+  }catch(e){}
+})();
+function syncNow(){ return Date.now() + clockOff; }
+function clockFresh(){ return clockAt && Date.now() - clockAt < 3600e3; }
+function clockSample(d){
+  if(!d || d.writer !== DEVICE || !clockSent || d.sent !== clockSent || !d.srv || !d.srv.toMillis) return;
+  var recv = Date.now(), rtt = recv - d.sent;
+  clockSent = 0;   // one sample per write
+  if(rtt < 0 || rtt > 10000) return;
+  if(rtt > clockRtt && clockFresh()) return;
+  clockOff = Math.round(d.srv.toMillis() - (d.sent + recv)/2);
+  clockRtt = rtt; clockAt = recv;
+  try{ localStorage.setItem(CLOCK_KEY, JSON.stringify({ off: clockOff, rtt: clockRtt, at: clockAt })); }catch(e){}
+}
+// A synced run's times are in server time (run.sync); convert to this device's.
+function runLocal(run, k){ return (+run[k] || 0) - (run.sync ? clockOff : 0); }
+function runRemaining(run){
+  var len = +run.len || modeSeconds(run.mode || "focus");
+  return Math.min(len, Math.max(0, (runLocal(run, "end") - Date.now())/1000));
+}
+
 function sumField(dayLog, f){
   var out = {}, dev, id;
   for(dev in dayLog){
@@ -2515,8 +2573,14 @@ function syncPayload(ledger){
     : { mode:mode, remaining:Math.ceil(Math.max(0, remaining)), committed:blockCommitted, len:blockLen };
   // Which device is running the timer, so the others mirror it instead of
   // running (and counting) the same study time themselves.
-  p.run = running ? { dev: DEVICE, n: deviceName(), at: runAt, mode: mode,
-                      end: Math.round(Date.now() + Math.max(0, remaining)*1000), len: blockLen } : null;
+  // Its times go out in server time (see "one clock for every device"), so a
+  // device whose own clock is off still shows the same second.
+  p.run = running ? { dev: DEVICE, n: deviceName(), at: Math.round(runAt + clockOff), mode: mode, sync: 1,
+                      end: Math.round(syncNow() + Math.max(0, remaining)*1000), len: blockLen } : null;
+  // For measuring this device's clock against the server's (clockSample).
+  p.writer = DEVICE;
+  p.sent = clockSent = Date.now();
+  if(SYNC && firebase.firestore) p.srv = firebase.firestore.FieldValue.serverTimestamp();
   return p;
 }
 
@@ -2559,8 +2623,13 @@ function initSync(){
         // a change has actually round-tripped through the server (i.e. it
         // came from another device, or confirms this one's own write).
         if(snap.metadata.hasPendingWrites) return;
-        if(snap.exists) applyRemoteState(snap.data());
+        if(!snap.exists) return;
+        var sd = snap.data();
+        clockSample(sd);
+        applyRemoteState(sd);
       });
+      // No recent clock measurement on this device: write once to get one.
+      if(!clockFresh()) pushSync();
     }).catch(function(){ pullPending = false; note("Could not reach sync."); });
   });
 }
@@ -2603,7 +2672,7 @@ function rememberLists(){
 }
 function stampLists(){
   if(!state.gone) state.gone = {};
-  var now = Date.now();
+  var now = syncNow();   // shared "which change is newer" stamps: server time
   LISTS.forEach(function(L){
     var cur = {};
     (state[L] || []).forEach(function(it){
@@ -2669,7 +2738,7 @@ function rememberFields(){
 function stampChanges(){
   if(!state.meta) state.meta = {};
   stampLists();
-  var now = Date.now();
+  var now = syncNow();
   trackedKeys().forEach(function(k){
     var j = JSON.stringify(fieldGet(state, k));
     if(k in seenFields && seenFields[k] !== j) state.meta[k] = now;
@@ -2705,7 +2774,7 @@ var runAt = 0;      // when this device took control (its latest Start)
 var mirror = null;  // another device's run we're displaying, or null
 var runSegs = [];   // focus time banked since this device's latest Start, as
                     // {t: end ms, s: secs, k: day, c: category, tk: task}
-function touchTimer(){ if(!state.meta) state.meta = {}; state.meta.timer = Date.now(); }
+function touchTimer(){ if(!state.meta) state.meta = {}; state.meta.timer = syncNow(); }
 function recordSeg(endMs, secs, dk){
   var last = runSegs[runSegs.length - 1], tk = state.activeTask || null;
   if(last && last.k === dk && last.c === state.activeCat && last.tk === tk &&
@@ -2740,7 +2809,7 @@ function mirrorRun(run){
   mirror = run;
   mode = run.mode || "focus";
   blockLen = +run.len || modeSeconds(mode);
-  remaining = Math.max(0, (run.end - Date.now())/1000);
+  remaining = runRemaining(run);
   blockCommitted = blockLen - remaining;   // the runner logs this block, not us
   running = false;
   setModeClass(mode);
@@ -2752,7 +2821,7 @@ function yieldTo(run){
   var d = (Date.now() - lastTick)/1000;
   if(d > 0){ remaining -= d; if(remaining < 0) remaining = 0; }
   commitElapsed();
-  removeOverlapSince(run.at);
+  removeOverlapSince(runLocal(run, "at"));
   pushAfterApply = true;   // publish what we banked before handing over
   mirrorRun(run);
   nativeStop();
@@ -2780,7 +2849,7 @@ function applyRemoteTimer(d){
     if(rt > lt) state.meta.timer = rt;
     if(run){
       if(running) yieldTo(run);
-      else { removeOverlapSince(run.at); mirrorRun(run); }
+      else { removeOverlapSince(runLocal(run, "at")); mirrorRun(run); }
     }else if(d.run && d.run.dev === DEVICE){
       // Our own run echoed back.
     }else if(d.timer){
@@ -3135,7 +3204,7 @@ function toggle(){
     runAt = t;
     runSegs = [];
     if(!state.meta) state.meta = {};
-    state.meta.timer = t;
+    state.meta.timer = syncNow();
     running = true;
     lastTick = t;
     lastRunSave = t;
@@ -3210,7 +3279,7 @@ function tick(){
   if(!running){
     if(mirror){
       // Show the other device's countdown live.
-      remaining = Math.max(0, (mirror.end - now)/1000);
+      remaining = runRemaining(mirror);
       blockCommitted = blockLen - remaining;
       drawClock();
     }
@@ -5694,7 +5763,7 @@ function adoptNativeState(){
   // deliberate action: let it count as one for sync (see touchTimer).
   if(!done.length && lv && !!lv.running === !!s.paused){
     touchTimer();
-    if(!s.paused){ runAt = state.meta.timer; runSegs = []; mirror = null; }
+    if(!s.paused){ runAt = Date.now(); runSegs = []; mirror = null; }
   }
 
   // Now the block the service is on.
