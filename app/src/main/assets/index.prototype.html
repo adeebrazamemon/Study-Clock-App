@@ -906,6 +906,7 @@
      frosted glass; --glass is computed in updateGlass() as the clearest tint
      that still keeps every text colour readable over the scene behind it. */
   #scenebg{position:fixed;inset:0;z-index:0;pointer-events:none;display:none;overflow:hidden}
+  #scenebg .scenefade{position:absolute;inset:0}
   body.scene{background:#10141a}
   body.scene #scenebg{display:block}
   body.scene .shell{position:relative;z-index:1}
@@ -920,7 +921,11 @@
   html.lite body.scene .card,html.lite body.scene .ovpill,html.lite body.scene .tabs,
   html.lite body.scene header.top .iconbtn,html.lite body.scene .footer,
   html.lite body.scene.fs #page-clock .clockwrap{-webkit-backdrop-filter:none;backdrop-filter:none}
-  body.scene .footer{border:1px solid var(--glass-line);border-radius:var(--radius);padding:9px 14px;width:fit-content;max-width:100%}
+  /* The whole pill is the button (the padding sits on the button, not the box). */
+  body.scene .footer{border:1px solid var(--glass-line);border-radius:var(--radius);padding:0;width:fit-content;max-width:100%;overflow:hidden}
+  body.scene .footer button{padding:9px 16px;color:var(--ink)}
+  body.scene .footer button:hover{background:rgba(255,255,255,.06)}
+  body.scene .footer #savenote:not(:empty){padding-right:14px}
   body.scene header.top h1{color:var(--scene-ink);text-shadow:0 1px 12px var(--scene-shadow)}
   /* Full screen is where a scene shows best. The clock floats in the middle
      with the scene all around it, in one of two looks (Settings > Scenes):
@@ -949,6 +954,9 @@
   .sclock .sc-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.22);overflow:hidden}
   .sclock .sc-bar i{display:block;height:100%;width:0;background:#fff;border-radius:2px;transition:width .6s}
   .sclock .sc-goal{font-size:12.5px;margin-top:9px}
+  /* "Show progress bar" off: the pill drops its bar and the "of today" line too. */
+  body.no-goal .sclock .sc-bar,body.no-goal .sclock .sc-goal{display:none}
+  body.no-goal .sclock .sc-t{margin-bottom:0}
   /* Its buttons: quiet glass, faded until you touch (as in plain full screen). */
   body.scene.fs.sc-min .controls{gap:10px}
   body.scene.fs.sc-min .controls button{background:rgba(8,10,20,var(--sc-a,.32));color:#fff;border:1px solid rgba(255,255,255,.2);
@@ -1229,8 +1237,8 @@
   <div class="dpane" id="pane-scene">
     <div class="scenegrid" id="scenegrid" role="group" aria-label="Scene"></div>
     <p class="scene-blurb" id="scene-blurb"></p>
-    <div class="field" id="f-scene-drive"><label for="in-scene-drive">Sky follows</label>
-      <select id="in-scene-drive"><option value="goal">Your daily goal</option><option value="time">Time of day</option></select>
+    <div class="field" id="f-scene-drive"><label for="in-scene-drive">Scene follows</label>
+      <select id="in-scene-drive"><option value="goal">Your daily goal</option><option value="time">Time of day</option><option value="still">Nothing: its best moment</option></select>
     </div>
     <div class="field" id="f-scene-clock"><label for="in-scene-clock">Full-screen clock</label>
       <select id="in-scene-clock"><option value="minimal">Minimal card</option><option value="regular">Regular clock</option></select>
@@ -1426,6 +1434,7 @@ var WHITE = [255, 255, 255], BLACK = [0, 0, 0];
 var CSS = [
   ".scn{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:hidden}",
   ".scn.still *{animation-play-state:paused !important}",
+  ".scn.scn-layer{overflow:visible;will-change:transform;pointer-events:none}",
   ".scn .tw{animation:scTw 3.2s ease-in-out infinite alternate}",
   "@keyframes scTw{from{opacity:.2}to{opacity:1}}",
   ".scn .drift{animation:scDrift linear infinite}",
@@ -1484,7 +1493,7 @@ function mount(host, id, opts){
   host.appendChild(svg);
   var defs = el("defs", null, svg), uid = "sc" + (++UID) + "-";
   var ctx = {
-    svg:svg, defs:defs, thumb:!!opts.thumb, motion:!opts.thumb, alive:true, timers:[], state:null,
+    svg:svg, defs:defs, host:host, thumb:!!opts.thumb, motion:!opts.thumb, alive:true, timers:[], state:null,
     view:{x0:0, x1:W, vw:W, k:1},
     id:function(n){ return uid + n; },
     url:function(n){ return "url(#" + uid + n + ")"; },
@@ -1502,7 +1511,7 @@ function mount(host, id, opts){
   measure(ctx);
   var inst = def.build(ctx), last = null;
   var api = {
-    id:id,
+    id:id, host:host,
     update:function(s){
       s = Object.assign({p:0, mode:"focus", running:false, motion:true}, s || {});
       s.p = clamp(s.p);
@@ -1517,7 +1526,8 @@ function mount(host, id, opts){
       if(measure(ctx) && inst.resize){ inst.resize(); last = null; if(ctx.state) api.update(ctx.state); }
     },
     tones:function(){ return inst.tones(); },
-    destroy:function(){ ctx.alive = false; ctx.timers.forEach(clearTimeout); ctx.timers = []; svg.remove(); }
+    destroy:function(){ ctx.alive = false; ctx.timers.forEach(clearTimeout); ctx.timers = []; svg.remove();
+      if(inst.destroy) inst.destroy(); }
   };
   return api;
 }
@@ -1526,9 +1536,9 @@ function measure(ctx){
   var r = ctx.svg.getBoundingClientRect();
   if(!r.width || !r.height) return false;
   var s = Math.max(r.width/W, r.height/H), vw = r.width/s, x0 = 800 - vw/2;
-  var changed = Math.abs(x0 - ctx.view.x0) > .5 || !ctx.measured;
+  var changed = Math.abs(x0 - ctx.view.x0) > .5 || Math.abs(s - (ctx.view.s || 0)) > .001 || !ctx.measured;
   ctx.measured = true;
-  ctx.view = {x0:x0, x1:800 + vw/2, vw:vw, k:Math.min(1, vw/1100)};
+  ctx.view = {x0:x0, x1:800 + vw/2, vw:vw, k:Math.min(1, vw/1100), s:s};
   return changed;
 }
 
@@ -1874,14 +1884,6 @@ function buildGarden(ctx){
   mistBand(545, 110, 1);
   var meadow = ridge(65, {base:668, amp:26, scale:420, oct:2});
   layer(.56, poly(meadow), minOf(meadow), 760);
-  // Small groves dotted over the meadow, kept clear of the river.
-  var mt = ["", ""], mr = rng(69);
-  for(var mk = 0; mk < 40; mk++){
-    var my = 684 + Math.pow(mr(), 1.4)*170, mx = mr()*W, mq = rv(my), mh = 16 + (my - 670)*.3;
-    if(Math.abs(mx - mq.x) < mq.w/2 + mh*.7 + 14) continue;
-    mt[mr() < .3 ? 1 : 0] += roundTree(mx, my, mh, mh*(.45 + mr()*.12));
-  }
-  var mg = layer(.66, mt[0], 600, 900); mg.bloom = el("path", {d:mt[1]}, svg);
 
   // The river comes out from under the far hill and swings left and right toward you.
   function rv(y){ var s = clamp((y - 650)/262); return {x:800 + (14 + 175*s)*Math.sin(s*Math.PI*4), w:3 + 210*Math.pow(s, 1.6), s:s}; }
@@ -1896,6 +1898,15 @@ function buildGarden(ctx){
     var gl = el("rect", {x:f1(gq.x - gw/2 + (R() - .5)*gq.w*.4), y:f1(gy), width:f1(gw), height:(1.2 + gq.s*2).toFixed(1), rx:1, fill:"#fff", filter:ctx.url("blur"), "class":"tw"}, glints);
     gl.style.animationDuration = (2 + R()*2.5).toFixed(2) + "s"; gl.style.animationDelay = (-R()*3).toFixed(2) + "s";
   }
+  // Small groves dotted over the meadow. Drawn after the river, so a crown can
+  // stand in front of the water further off but no trunk ever sits in it.
+  var mt = ["", ""], mr = rng(69);
+  for(var mk = 0; mk < 40; mk++){
+    var my = 684 + Math.pow(mr(), 1.4)*170, mx = mr()*W, mq = rv(my), mh = 16 + (my - 670)*.3;
+    if(Math.abs(mx - mq.x) < mq.w/2 + mh*.45 + 16) continue;
+    mt[mr() < .3 ? 1 : 0] += roundTree(mx, my, mh, mh*(.45 + mr()*.12));
+  }
+  var mg = layer(.66, mt[0], 600, 900); mg.bloom = el("path", {d:mt[1]}, svg);
   mistBand(640, 100, 2);
 
   // Near banks either side, wooded, framing the river.
@@ -1903,10 +1914,25 @@ function buildGarden(ctx){
   var lbTrees = grove(leftBank, {seed:66, from:-10, to:420, gap:[30, 70], h:[70, 120], alt:.35});
   var lb = layer(.74, poly(leftBank) + lbTrees[0], 560, 900);
   lb.bloom = el("path", {d:lbTrees[1]}, svg);
+  // Bushes along the top of each bank, so its trees stand rooted in growth
+  // rather than on a bare edge, and spring flowers through the grass below.
+  var growth = [];
+  function bankGrowth(pts, from, to, seed){
+    var r = rng(seed), bush = canopy(pts, {seed:seed, from:from, to:to, gap:[14, 30], r:[12, 24]});
+    var fl = ["", ""];
+    for(var n = 0; n < 90; n++){
+      var fx = from + r()*(to - from), fy = at(pts, fx) + 10 + Math.pow(r(), 1.3)*90, fr = 2 + (fy - 650)*.012;
+      if(fy > 905) continue;
+      fl[r() < .6 ? 0 : 1] += blob(fx, fy, [[0, 0, fr*1.2, fr]]);
+    }
+    growth.push({bush:el("path", {d:bush}, svg), pink:el("path", {d:fl[0]}, svg), gold:el("path", {d:fl[1]}, svg)});
+  }
+  bankGrowth(leftBank, -30, 470, 91);
   var rightBank = []; for(x = 860; x <= 1620; x += 5) rightBank.push([x, lerp(930, 690 - (x - 1060)*.07, smooth(880, 1070, x)) + Math.sin(x/29)*4]);
   var rbTrees = grove(rightBank, {seed:67, from:1240, to:1620, gap:[34, 80], h:[70, 120], alt:.3});
   var rb = layer(.74, poly(rightBank) + rbTrees[0], 560, 900);
   rb.bloom = el("path", {d:rbTrees[1]}, svg);
+  bankGrowth(rightBank, 1080, 1630, 92);
 
   // The big tree: its branches and crown grow with your goal.
   var treeAt = el("g", null, svg);
@@ -1994,6 +2020,12 @@ function buildGarden(ctx){
       mists.forEach(function(m){ m.node.setAttribute("opacity", (c.mist*[.85, .9, .7][m.k]).toFixed(3)); });
       water[0].setAttribute("stop-color", css(mix(c.hor, c.mid, .4))); water[1].setAttribute("stop-color", css(mix(c.mid, c.top, .6)));
       riverEdge.setAttribute("stroke", css(mix(c.hor, c.land, .7)));
+      var flowersOn = smooth(.1, .6, p);
+      growth.forEach(function(g){
+        g.bush.setAttribute("fill", css(mix(mix(c.hor, c.land, .8), c.sun, .08)));
+        g.pink.setAttribute("fill", css(mix(c.bloom, WHITE, .2))); g.pink.setAttribute("opacity", flowersOn.toFixed(3));
+        g.gold.setAttribute("fill", css(mix(hex("#f6d77a"), WHITE, .15))); g.gold.setAttribute("opacity", (flowersOn*.9).toFixed(3));
+      });
       // The tree.
       var nearC = mix(c.hor, c.land, .9);
       bark.setAttribute("stroke", css(mix(nearC, BLACK, .25)));
@@ -2131,30 +2163,65 @@ function buildRain(ctx){
   layer(.76, poly(rightBank) + rbT[0], 600, 900);
   var front = el("path", null, svg), tufts = el("g", null, svg);
   var ground = ridge(78, {base:918, amp:30, scale:160});
+  // Tufts sway in a few groups, each in its own rhythm (one animation per
+  // group, not per blade: far less work every frame).
+  var tuftD = ["", "", "", "", "", ""];
   for(i = 0; i < 70; i++){
     var gx = R()*W, gy = 912 - R()*24, gh = 28 + R()*46;
-    var t = el("path", {d:"M" + f1(gx - 4) + " " + f1(gy) + "Q" + f1(gx - 2) + " " + f1(gy - gh*.6) + " " + f1(gx + 6) + " " + f1(gy - gh) + "Q" + f1(gx + 2) + " " + f1(gy - gh*.5) + " " + f1(gx + 4) + " " + f1(gy) + "Z", "class":"grass"}, tufts);
-    t.style.animationDuration = (2.4 + R()*2).toFixed(2) + "s"; t.style.animationDelay = (-R()*3).toFixed(2) + "s";
+    tuftD[i % 6] += "M" + f1(gx - 4) + " " + f1(gy) + "Q" + f1(gx - 2) + " " + f1(gy - gh*.6) + " " + f1(gx + 6) + " " + f1(gy - gh) + "Q" + f1(gx + 2) + " " + f1(gy - gh*.5) + " " + f1(gx + 4) + " " + f1(gy) + "Z";
   }
+  tuftD.forEach(function(d, k){
+    var t = el("path", {d:d, "class":"grass"}, tufts);
+    t.style.animationDuration = (2.6 + k*.37).toFixed(2) + "s"; t.style.animationDelay = (-k*.9).toFixed(2) + "s";
+  });
   function layout(){
     var v = ctx.view, k = v.k;
     front.setAttribute("d", poly(ground) + roundTree(v.x1 + 10*k, 930, 430*(.8 + .2*k), 160*k));
+    // New size: restart the rain at the new pixel scale.
+    (typeof sheets === "undefined" ? [] : sheets).forEach(function(sh){ if(sh.anim){ sh.anim.cancel(); sh.anim = null; } });
   }
   layout();
 
-  // Rain: a light sheet and a heavy sheet, each a seamless falling loop.
+  // Rain: a light sheet and a heavy sheet, each a seamless falling loop. Each
+  // sheet is its own <svg> on top of the scene, moved as a whole by the GPU
+  // (a transform on the element), so falling rain never repaints the scene
+  // under it. Repainting the whole drawing 60 times a second is what made a
+  // tablet flicker in a downpour.
+  var sheets = [];
   function sheet(seed, n, len, width, opacity, dur){
-    var at2 = el("g", {opacity:0}, svg), g = el("g", {"class":"rain"}, at2), d = "";
-    g.style.animationDuration = dur + "s";
-    for(var k = -1; k <= 3; k++){
+    var top = el("svg", {viewBox:"0 0 1600 900", preserveAspectRatio:"xMidYMid slice", "class":"scn scn-layer", "aria-hidden":"true", focusable:"false"});
+    var d = "";
+    for(var k = 0; k <= 3; k++){
       var r = rng(seed);   // the same streaks in every band, so the loop is seamless
-      for(var j = 0; j < n; j++){
-        var dx = -200 + r()*2000 - 60*k, dy = r()*300 + 300*k - 300, ln = len*(.7 + r()*.6);
+      for(var j = 0; j < n*1.2; j++){   // 2400 wide (was 2000): covers ultra-wide screens too
+        var dx = -400 + r()*2400 - 60*k, dy = r()*300 + 300*k - 300, ln = len*(.7 + r()*.6);
         d += "M" + f1(dx) + " " + f1(dy) + "l" + f1(-ln*.2) + " " + f1(ln);
       }
     }
-    el("path", {d:d, stroke:"#d6dfe9", "stroke-width":width, "stroke-linecap":"round", opacity:opacity}, g);
-    return at2;
+    el("path", {d:d, stroke:"#d6dfe9", "stroke-width":width, "stroke-linecap":"round", opacity:opacity}, top);
+    if(!ctx.thumb) ctx.host.appendChild(top);
+    else { var g = el("g", null, svg); while(top.firstChild) g.appendChild(top.firstChild); top = g; }
+    var sh = {node:top, dur:dur*1000, anim:null, on:false};
+    sheets.push(sh);
+    return sh;
+  }
+  function sheetShow(sh, o){
+    var on = o > .004;
+    sh.node.style.opacity = o.toFixed(3);
+    if(on !== sh.on){ sh.on = on; sh.node.style.display = on ? "" : "none"; }
+    if(ctx.thumb) return;
+    // The fall is one step of the repeating pattern (60 left, 300 down in the
+    // drawing), turned into screen pixels at the current size.
+    if(on && !sh.anim && sh.node.animate){
+      var s = ctx.view.s || 1;
+      sh.anim = sh.node.animate([{transform:"translate(0,0)"}, {transform:"translate(" + (-60*s).toFixed(2) + "px," + (300*s).toFixed(2) + "px)"}],
+        {duration:sh.dur, iterations:Infinity});
+    }
+    if(sh.anim){
+      if(!on){ sh.anim.cancel(); sh.anim = null; }
+      else if(ctx.motion && sh.anim.playState === "paused") sh.anim.play();
+      else if(!ctx.motion && sh.anim.playState === "running") sh.anim.pause();
+    }
   }
   var lightRain = sheet(9, 45, 22, 1.1, .5, .55), heavyRain = sheet(19, 120, 36, 1.4, .65, .36);
   var flash = el("rect", {width:W, height:H, fill:"#e6ecff", opacity:0}, svg);
@@ -2220,17 +2287,19 @@ function buildRain(ctx){
       mists.forEach(function(m){ m.node.setAttribute("opacity", (mistAmt*[.8, .75, .6][m.k]).toFixed(3)); });
       var frontC = css(mix(hor, land, .95));
       front.setAttribute("fill", frontC); tufts.setAttribute("fill", frontC);
-      lightRain.setAttribute("opacity", smooth(.05, .3, I).toFixed(3));
-      heavyRain.setAttribute("opacity", smooth(.45, 1, I).toFixed(3));
+      sheetShow(lightRain, smooth(.05, .3, I));
+      sheetShow(heavyRain, smooth(.45, 1, I));
     },
+    destroy:function(){ sheets.forEach(function(sh){ if(sh.anim) sh.anim.cancel(); if(sh.node.parentNode && !ctx.thumb) sh.node.remove(); }); },
     tones:function(){ var c = cur || {top:C.top[0], mid:C.mid[0], hor:C.hor[0], land:C.land[0]}; return [c.top, c.mid, c.hor, mix(c.hor, c.land, .6)]; }
   };
 }
 
 var DEFS = {
-  valley:{name:"Valley", blurb:"The sun sets as you work, night falls, and it rises when you hit your goal.", time:true, sample:.44, build:buildValley},
-  garden:{name:"Garden", blurb:"Morning mist lifts off the tea hills as you work, and the big tree grows in full by your goal.", sample:.7, build:buildGarden},
-  rain:{name:"Rain", blurb:"Light rain to start, a downpour by mid-goal, then it clears to a rainbow when you hit your goal.", sample:.95, build:buildRain}
+  // still: the moment "Scene follows: Nothing" holds.
+  valley:{name:"Valley", blurb:"The sun sets as you work, night falls, and it rises when you hit your goal.", time:true, sample:.44, still:.33, build:buildValley},
+  garden:{name:"Garden", blurb:"Morning mist lifts off the hills as you work, and the big tree grows into full bloom by your goal.", sample:.7, still:1, build:buildGarden},
+  rain:{name:"Rain", blurb:"Light rain to start, a downpour by mid-goal, then it clears to a rainbow when you hit your goal.", sample:.95, still:.5, build:buildRain}
 };
 
 // Valley by the clock instead of the goal: afternoon at 2pm, sunset ~7:30pm,
@@ -2246,6 +2315,7 @@ window.Scenes = {
   list:Object.keys(DEFS).map(function(k){ return {id:k, name:DEFS[k].name, blurb:DEFS[k].blurb, time:!!DEFS[k].time, sample:DEFS[k].sample}; }),
   has:function(id){ return !!DEFS[id]; },
   supportsTime:function(id){ return !!(DEFS[id] && DEFS[id].time); },
+  stillPoint:function(id){ return DEFS[id] && DEFS[id].still != null ? DEFS[id].still : 1; },
   mount:mount,
   timeOfDay:timeOfDay
 };
@@ -3606,7 +3676,7 @@ var sceneInst = null, sceneId = "none";
 var sceneShown = null,     // the progress the scene is showing now
     sceneDrop = null,      // {from, to} while winding back
     scenePreview = null,   // the Settings preview slider overrides while dragged
-    sceneTimer = 0, sceneLast = 0, glassKey = "";
+    sceneTimer = 0, sceneLast = 0, glassKey = "", glassSet = {};
 var SCENE_BACK_MS = 3*60*1000;
 var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 // "Preview the day" (Settings > Scenes) is a tool for checking scenes while
@@ -3614,7 +3684,11 @@ var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: 
 var DEV_PREVIEW = ["localhost", "127.0.0.1", "[::1]"].indexOf(location.hostname) >= 0;
 function scenesReady(){ return !!(window.Scenes && Scenes.mount); }
 function sceneTimeMode(){ return state.settings.sceneDrive === "time" && scenesReady() && Scenes.supportsTime(sceneId); }
+// "Nothing": the scene holds its best-looking moment all day (a downpour, a
+// pink sky just before sunset, the garden in full bloom), still animated.
+function sceneStillMode(){ return state.settings.sceneDrive === "still" && scenesReady(); }
 function sceneTarget(){
+  if(sceneStillMode()) return Scenes.stillPoint(sceneId);
   if(sceneTimeMode()) return Scenes.timeOfDay(new Date());
   var rec = state.days[key(new Date())] || {}, total = 0;
   for(var c in rec) total += rec[c];
@@ -3625,7 +3699,7 @@ function syncScene(){
   var want = state.settings.scene || "none";
   if(!scenesReady() || !Scenes.has(want)) want = "none";
   if(want !== sceneId){
-    if(sceneInst){ sceneInst.destroy(); sceneInst = null; }
+    dropScenes();
     sceneId = want; sceneShown = null; sceneDrop = null; glassKey = "";
     // The class goes on first: the backdrop has to be visible (sized) when the scene measures it.
     document.body.classList.toggle("scene", want !== "none");
@@ -3637,14 +3711,14 @@ function syncScene(){
       return;
     }
   }
-  if(sceneInst){ glassKey = ""; stepScene(); }
+  if(sceneInst){ glassKey = ""; glassSet = {}; stepScene(); }   // applyTheme may have rewritten the colours
 }
 function stepScene(){
   clearTimeout(sceneTimer);
   if(!sceneInst) return;
   var now = Date.now(), dt = sceneLast ? Math.min(5000, now - sceneLast) : 0, t = sceneTarget();
   sceneLast = now;
-  if(sceneShown === null || sceneTimeMode()){ sceneShown = t; sceneDrop = null; }
+  if(sceneShown === null || sceneTimeMode() || sceneStillMode()){ sceneShown = t; sceneDrop = null; }
   else if(t < sceneShown - 0.002){
     if(!sceneDrop || Math.abs(sceneDrop.to - t) > 0.001) sceneDrop = {from:sceneShown, to:t};
     sceneShown = Math.max(t, sceneShown - (sceneDrop.from - t)*dt/SCENE_BACK_MS);
@@ -3653,16 +3727,58 @@ function stepScene(){
     var d = t - sceneShown;
     sceneShown = d > 0.002 ? sceneShown + d*(1 - Math.exp(-dt/4000)) : t;
   }
+  // A big step forward (time added by hand, or synced in from another device)
+  // dissolves straight into the new moment. Gliding there would repaint the
+  // whole scene several times a second for half a minute, which stutters on
+  // a tablet; a reset still winds back slowly (above).
+  var big = !sceneDrop && scenePreview === null && t - sceneShown > 0.04 && !sceneTimeMode();
+  if(big) sceneShown = t;
   var moving = sceneDrop || Math.abs(t - sceneShown) > 0.002;
-  sceneInst.update({
+  var su = {
     p: scenePreview !== null ? scenePreview : sceneShown,
     mode: focusLike(mode) ? "focus" : "break",
     running: running,
     motion: state.settings.sceneMotion !== false && !reduceMotion
-  });
+  };
+  if(!(big && sceneCrossfade(su))) sceneInst.update(su);
   updateGlass();
   syncAmbient();   // "Match the scene" rain follows the scene's weather
   sceneTimer = setTimeout(stepScene, moving ? 250 : 1000);
+}
+// Old scenes still on screen while a crossfade finishes.
+var sceneOld = [];
+function dropScene(inst){
+  if(!inst) return;
+  var wrap = inst.host && inst.host.classList.contains("scenefade") ? inst.host : null;
+  inst.destroy();
+  if(wrap) wrap.remove();
+}
+function dropScenes(){
+  sceneOld.forEach(function(o){ dropScene(o.inst); });
+  sceneOld = [];
+  dropScene(sceneInst); sceneInst = null;
+}
+function sceneCrossfade(su){
+  if(reduceMotion || document.hidden || !sceneInst) return false;
+  var host = document.getElementById("scenebg");
+  var wrap = document.createElement("div");
+  wrap.className = "scenefade";
+  host.appendChild(wrap);
+  var inst = Scenes.mount(wrap, sceneId);
+  if(!inst){ wrap.remove(); return false; }
+  inst.update(su);
+  var old = sceneInst, rec = {inst:old};
+  sceneOld.push(rec);
+  sceneInst = inst;
+  var done = function(){
+    var i = sceneOld.indexOf(rec);
+    if(i >= 0){ sceneOld.splice(i, 1); dropScene(old); }
+  };
+  if(wrap.animate){
+    var a = wrap.animate([{opacity:0}, {opacity:1}], {duration:1600, easing:"ease-in-out"});
+    a.onfinish = done; a.oncancel = done;
+  }else done();
+  return true;
 }
 // Frosted glass: the clearest tint of the card colour over which the text,
 // muted text and accent text all stay readable against every colour the scene
@@ -3674,6 +3790,9 @@ function updateGlass(){
   if(key2 === glassKey) return;
   glassKey = key2;
   var root = document.documentElement, cs = getComputedStyle(root);
+  // Only write what actually changed: each write restyles the whole app, and
+  // repaints every frosted card (the cause of flicker on tablets).
+  var setProp = function(k, v){ if(glassSet[k] !== v){ glassSet[k] = v; root.style.setProperty(k, v); } };
   var surf = parseColor(cs.getPropertyValue("--surface")), ink = parseColor(cs.getPropertyValue("--ink")),
       muted = parseColor(cs.getPropertyValue("--muted"));
   if(!surf || !ink || !muted) return;
@@ -3684,32 +3803,32 @@ function updateGlass(){
   }
   a = Math.min(0.96, a);
   bgs = tones.map(function(t){ return mixRgb(t, surf, a); });
-  root.style.setProperty("--glass", "rgba(" + surf.join(",") + "," + a.toFixed(2) + ")");
-  root.style.setProperty("--glass-line", "rgba(" + ink.join(",") + ",.14)");
+  setProp("--glass", "rgba(" + surf.join(",") + "," + a.toFixed(2) + ")");
+  setProp("--glass-line", "rgba(" + ink.join(",") + ",.14)");
   // The full-screen panel holds only large text (the time, the clock), so it
   // can be clearer: WCAG's large-text levels (4.5:1 text, 3:1 secondary).
   var a2 = 0.3;
   for(; a2 < a; a2 += 0.02){
     if(tones.every(function(t){ var bg = mixRgb(t, surf, a2); return contrastRatio(ink, bg) >= 4.5 && contrastRatio(muted, bg) >= 3; })) break;
   }
-  root.style.setProperty("--glass-soft", "rgba(" + surf.join(",") + "," + Math.min(a, a2).toFixed(2) + ")");
+  setProp("--glass-soft", "rgba(" + surf.join(",") + "," + Math.min(a, a2).toFixed(2) + ")");
   // The full-screen scene clock: white text on a dark tint, as light a tint as
   // keeps the small label and goal line at 4.5:1 over every scene colour.
   var tint = [8,10,20], a3 = 0.22;
   for(; a3 < 0.8; a3 += 0.02){
     if(tones.every(function(t){ return contrastRatio([255,255,255], mixRgb(t, tint, a3)) >= 4.5; })) break;
   }
-  root.style.setProperty("--sc-a", a3.toFixed(2));
+  setProp("--sc-a", a3.toFixed(2));
   // Coloured text: readable on the glass too, not just on a solid card.
   [["--focus-text", "--focus"], ["--rest-text", "--rest"], ["--warn-text", "--warn"]].forEach(function(p){
     var c = parseColor(cs.getPropertyValue(p[1]));
-    if(c) root.style.setProperty(p[0], rgbStr(readableText(c, bgs.concat([surf]), ink, 4.5)));
+    if(c) setProp(p[0], rgbStr(readableText(c, bgs.concat([surf]), ink, 4.5)));
   });
   // The page title sits straight on the scene: white or dark, whichever reads better on the sky.
   var sky = tones[0], white = [255,255,255], dark = [22,33,31];
   var useWhite = contrastRatio(white, sky) >= contrastRatio(dark, sky);
-  root.style.setProperty("--scene-ink", useWhite ? "#fff" : "#16211F");
-  root.style.setProperty("--scene-shadow", useWhite ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.55)");
+  setProp("--scene-ink", useWhite ? "#fff" : "#16211F");
+  setProp("--scene-shadow", useWhite ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.55)");
 }
 window.addEventListener("resize", function(){ if(sceneInst){ sceneInst.resize(); } });
 document.addEventListener("visibilitychange", function(){ if(!document.hidden && sceneInst){ sceneLast = Date.now(); stepScene(); } });
@@ -3746,10 +3865,16 @@ function renderSceneGallery(){
   document.getElementById("scene-blurb").textContent = blurb;
   var has = cur !== "none";
   // Rows that don't apply stay in place, invisible ("off"), so the window doesn't resize.
-  document.getElementById("f-scene-drive").classList.toggle("off", !(has && scenesReady() && Scenes.supportsTime(cur)));
+  document.getElementById("f-scene-drive").classList.toggle("off", !(has && scenesReady()));
+  // Time of day is a Valley thing; elsewhere that choice isn't offered (and a
+  // synced "time" falls back to the goal, which is what the scene then shows).
+  var timeOk = has && scenesReady() && Scenes.supportsTime(cur);
+  document.querySelector("#in-scene-drive option[value=time]").hidden = !timeOk;
+  document.querySelector("#in-scene-drive option[value=time]").disabled = !timeOk;
   document.getElementById("f-scene-preview").hidden = !DEV_PREVIEW;   // dev-only: never takes space in the app
   document.getElementById("f-scene-preview").classList.toggle("off", !has);
-  document.getElementById("in-scene-drive").value = state.settings.sceneDrive || "goal";
+  var drive = state.settings.sceneDrive || "goal";
+  document.getElementById("in-scene-drive").value = (drive === "time" && !timeOk) ? "goal" : drive;
   document.getElementById("in-scene-motion").checked = state.settings.sceneMotion !== false;
   document.getElementById("in-blur").value = blurPref();
   document.getElementById("in-scene-clock").value = state.settings.sceneClock === "regular" ? "regular" : "minimal";
