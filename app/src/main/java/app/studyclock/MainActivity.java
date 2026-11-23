@@ -28,6 +28,9 @@ import androidx.credentials.CustomCredential;
 import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.ClearCredentialException;
+
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import androidx.credentials.exceptions.GetCredentialException;
 
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
@@ -325,6 +328,27 @@ public class MainActivity extends AppCompatActivity {
             final long total = parsed;
             runOnUiThread(new Runnable() {
                 @Override public void run() { TimerService.setTotal(total); }
+            });
+        }
+
+        /** Reports which screen of the page is showing (Overview, Clock, Tasks)
+         *  to Firebase Analytics. Does nothing until the app is built with
+         *  google-services.json (no Firebase app configured). */
+        @JavascriptInterface
+        public void trackScreen(final String name) {
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        if (FirebaseApp.getApps(MainActivity.this).isEmpty()) return;
+                        Bundle b = new Bundle();
+                        b.putString(FirebaseAnalytics.Param.SCREEN_NAME, name);
+                        b.putString(FirebaseAnalytics.Param.SCREEN_CLASS, "MainActivity");
+                        FirebaseAnalytics.getInstance(MainActivity.this)
+                                .logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, b);
+                    } catch (Exception ignored) {
+                        // Analytics must never break the app.
+                    }
+                }
             });
         }
 

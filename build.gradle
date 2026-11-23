@@ -1,4 +1,7 @@
 plugins {
     // 8.10.0 is the earliest AGP that supports compileSdk 36.
     id 'com.android.application' version '8.10.0' apply false
+    // Reads app/google-services.json (Firebase Analytics); applied by the app
+    // module only when that file is present.
+    id 'com.google.gms.google-services' version '4.6.0' apply false
 }

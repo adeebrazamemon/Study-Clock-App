@@ -2,6 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
+// Firebase Analytics needs app/google-services.json (downloaded from the
+// Firebase console). Without it the app still builds; it just reports nothing.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+
 android {
     namespace 'app.studyclock'
     compileSdk 36
@@ -59,4 +65,9 @@ dependencies {
     implementation 'androidx.credentials:credentials:1.3.0'
     implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+
+    // Counts app users and which screens they open (see trackScreen in
+    // MainActivity). Reports only once app/google-services.json is in place.
+    implementation platform('com.google.firebase:firebase-bom:35.2.0')
+    implementation 'com.google.firebase:firebase-analytics'
 }

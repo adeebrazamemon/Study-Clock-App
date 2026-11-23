@@ -950,8 +950,6 @@
   .scenecard:focus-visible .scthumb{outline:2.5px solid var(--ink);outline-offset:2px}
   .scene-blurb{color:var(--muted);font-size:13px;margin:0 0 14px;min-height:4.5em}
   .field-col input[type=range]{width:100%;accent-color:var(--focus)}
-  /* While picking a scene, dim the page behind the dialog less so you can see it. */
-  #dlg-settings.scenes-open::backdrop{background:rgba(0,0,0,.12)}
 
   /* Daily goal reached: a small card and a burst of confetti (see celebrateGoal). */
   .cheer{position:fixed;left:50%;top:16%;z-index:120;transform:translate(-50%,-12px);opacity:0;pointer-events:none;
@@ -4211,6 +4209,10 @@ function showPage(name, skipFsGuard){
   if(name === "overview"){ renderStats(); renderCalendar(); renderBreakdown(); }
   if(name === "tasks") renderTasks();
   if(name === "clock") renderClock();
+  // Android app: count which screen is open (Firebase Analytics, screen name only).
+  if(NATIVE && window.AndroidTimer.trackScreen){
+    try{ window.AndroidTimer.trackScreen({overview:"Overview", clock:"Clock", tasks:"Tasks"}[name] || name); }catch(e){}
+  }
 }
 
 /* On a wide screen the full task list lives in the Clock page's sidebar
@@ -4915,7 +4917,6 @@ function showSettingsPane(want){
   Array.prototype.forEach.call(document.querySelectorAll("#dlg-settings .dpane"), function(p){
     p.classList.toggle("on", p.id === "pane-" + want);
   });
-  dlgSettings.classList.toggle("scenes-open", want === "scene");
   if(want === "scene") renderSceneGallery();
 }
 document.getElementById("scenebtn").addEventListener("click", function(){
@@ -4955,7 +4956,6 @@ document.getElementById("in-scene-preview").addEventListener("input", function()
 });
 // Previewing is only while the dialog is open: closing it goes back to the real progress.
 dlgSettings.addEventListener("close", function(){
-  dlgSettings.classList.remove("scenes-open");
   if(scenePreview !== null){ scenePreview = null; stepScene(); }
 });
 
